@@ -1,0 +1,101 @@
+# TOML File for Blueconda themes
+
+[Default] 
+# The theme to Apply
+themename = "cerculean"
+# For Window Settings
+background = "white"
+textforeground = "black"
+# For Syntax Highlight
+comment = "grey"
+string = "green"
+keyword = "orange"
+number = "blue"
+operator = "#049acc"
+parenthesis = "#049acc" # Same as operator
+function = "#674fff"
+variable = "#26C6DA"
+f_string = "#c72222"
+linenumfg = "#046fc7"
+module = "#f54b38"
+
+
+[TreeTrunks] 
+# The theme to Apply
+themename = "cerculean"
+# For Window Settings
+background = "#fdf6e3"
+textforeground = "black"
+# For Syntax Highlight
+comment = "grey"
+string = "green"
+keyword = "orange"
+number = "blue"
+operator = "#049acc"
+parenthesis = "#049acc" # Same as operator
+function = "#674fff"
+variable = "#26C6DA"
+f_string = "#c72222"
+linenumfg = "#046fc7"
+module = "#f54b38"
+
+
+[Batman]
+# The theme to Apply
+themename = "darkly"
+# For Window Settings
+background = "#222222"
+textforeground = "white"
+
+# For Syntax Highlight
+comment = "grey"
+string = "#00bc8c"
+keyword = "orange"
+number = "#00ACC1"
+operator = "#049acc"
+parenthesis = "#049acc" # Same as operator
+function = "#674fff"
+variable = "#26C6DA"
+f_string = "#c72222"
+linenumfg = "#757373"
+module = "#f54b38"
+
+[DeepBlue]
+# The theme to Apply
+themename = "superhero"
+# For Window Settings
+background = "#2b3e50"
+textforeground = "white"
+
+# For Syntax Highlight
+comment = "grey"
+string = "#00bc8c"
+keyword = "orange"
+number = "#007cb5"
+operator = "#049acc"
+parenthesis = "#049acc" # Same as operator
+function = "#674fff"
+variable = "#26C6DA"
+f_string = "#c72222"
+linenumfg = "#949494"
+module = "#f54b38"
+
+[Solarized]
+# The theme to Apply
+themename = "solar"
+# For Window Settings
+background = "#002B36"
+textforeground = "#f8fd62"
+
+# For Syntax Highlight
+comment = "grey"
+string = "#00bc8c"
+keyword = "orange"
+number = "#007cb5"
+operator = "#049acc"
+parenthesis = "#049acc" # Same as operator
+function = "#674fff"
+variable = "#26C6DA"
+f_string = "#c72222"
+linenumfg = "#faf682"
+module = "#f54b38"
