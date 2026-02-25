@@ -1,0 +1,9 @@
+# Blueconda Editor: The Beginner Friendly Python Code Editor
+
+NOTE: This README (as well as this project) is a work in progress and will continue to be updated until the first alpha release.
+The current project structure is extremely unprofessional and unorganised, with massive 4000+ line .py files and multiple test .exe files. The main source code is also littered with notes to myself. I'll do my best to clean this up before the Alpha release.
+
+WIP Documentation is available at [GitBook.](https://hntech.gitbook.io/Blueconda-documentation)
+
+The WIP landing page (soon to be on HNTech's website) is live on [CodePen.](https://codepen.io/CodeBuilderPro/full/mdZPqEY)
+
