@@ -1,7 +1,6 @@
 # Blueconda Source Code - Made with Love by HNTech
 # For queries, contact m.hamza.naveed@outlook.com
 # (Yes, this code is very ugly I know)
-# You see, I'm a self taught Python dev with ~1 year of experience
 
 
 

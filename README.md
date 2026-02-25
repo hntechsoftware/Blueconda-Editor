@@ -7,3 +7,10 @@ WIP Documentation is available at [GitBook.](https://hntech.gitbook.io/Blueconda
 
 The WIP landing page (soon to be on HNTech's website) is live on [CodePen.](https://codepen.io/CodeBuilderPro/full/mdZPqEY)
 
+
+This code uses some .exe files, which violates the open source standard I so strictly support. for the Alpha release I'll set it up to compile the exe files on its own from Python source files.
+A list of other stuff I want to add and fix throughout can be found in:
+- TODOs and FIXMEs scattered throughout the source file
+- LibraryManager.py (empty for now, except my notes.)
+
+Please ignore the packet sniffer for now.
