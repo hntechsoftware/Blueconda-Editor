@@ -58,7 +58,7 @@ from datetime import date, datetime
 import tkinter.font as tkfont
 import types
 import builtins
-from numba import cuda, vectorize
+import shutil
 
 # Define theme for app
 themeblueconda = { # This was redacted later
@@ -134,7 +134,101 @@ textandlineborder = 0 # For UI debugging purposes
 #else:
 #    pass
 
-# Code to verify existence of Nvidia Compatible GPU for hardware acceleration
+
+
+import subprocess
+import tkinter as tk
+from tkinter import ttk
+import os
+import sys
+
+def build_exe(script_path, AppToLaunch, EnableWait:bool):
+    # 1. Setup the Toplevel
+    popup = tk.Toplevel()
+    popup.title("Install Manager")
+    #popup.geometry("600x450")
+    
+    # This makes the Toplevel "Modal" - it locks the main window
+    popup.grab_set() 
+    
+    label = tk.Label(popup, text="Install Manager", font=("Arial", 10, "bold"))
+    label.pack(pady=5)
+    label2 = tk.Label(popup, text="Please wait whilst Blueconda does some maintenance", font=("Arial", 6, "bold"))
+    label2.pack(pady=5)
+
+    progress = ttk.Progressbar(popup, mode='indeterminate', length=300)
+    progress.pack()
+    progress.start(10)
+
+    output_text = tk.Text(popup, bg="#1e1e1e", fg="#00ff00", font=("Consolas", 10))
+    output_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    def run_and_stream(cmd):
+        process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            shell=True
+        )
+        
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                output_text.insert(tk.END, line)
+                output_text.see(tk.END)
+                
+                # CRITICAL: This updates the Toplevel only.
+                # The main window is technically 'waiting' for this function to finish.
+                popup.update() 
+        
+        return process.poll()
+
+    # 2. Check for PyInstaller
+    output_text.insert(tk.END, "Verifying PyInstaller...\n")
+    popup.update()
+    
+    # Try to get version
+    check = subprocess.run([sys.executable, "-m", "PyInstaller", "--version"], 
+                           capture_output=True, shell=True)
+
+    if check.returncode != 0:
+        output_text.insert(tk.END, "PyInstaller not found. Installing...\n")
+        run_and_stream([sys.executable, "-m", "pip", "install", "pyinstaller"])
+    
+    # 3. Build the EXE
+    script_dir = os.path.dirname(os.path.abspath(script_path))
+    build_cmd = [
+        sys.executable, "-m", "PyInstaller", 
+        "--onefile", 
+        "--clean",
+        "--distpath", script_dir, 
+        script_path,
+    ]
+    
+    output_text.insert(tk.END, f"\nStarting Build...\n")
+    result = run_and_stream(build_cmd)
+
+    if result == 0: # Success
+        
+        def close_exe_routine():
+            output_text.insert(tk.END, "\nSUCCESS: EXE created in script directory.")
+            # Re-enable the main window once closed
+            btn = tk.Button(popup, bg="red",fg="white", text="CLOSE", command=popup.destroy)
+            btn.pack(pady=5)
+            progress.stop()
+            # Launch the sript after the exe build finished
+            newprocess = subprocess.Popen([f"{AppToLaunch}"])
+            if EnableWait:
+                newprocess.wait()
+        # Using a wrapper function bc of common Race Hazard issues
+        # with both compiler and exe trying to access same file at once
+        popup.after(1200, close_exe_routine)
+    else:
+        output_text.insert(tk.END, "\nERROR: Build failed.")
+
 
 
 # Declare the theme
@@ -2625,7 +2719,8 @@ def doceditor():
     try:
         subprocess.Popen(["MDEditor.exe"])
     except Exception:
-        process = subprocess.Popen(["python", "MDEditor.py"])
+        build_exe("MDEditor.py","MDEditor.exe",False)
+
     # Continue with Python code while the .exe runs
     #process.wait()
 
@@ -2921,6 +3016,71 @@ def terminate_script(event=None):
 
 window.bind("<Control-t>", terminate_script)
 '''
+
+def pythonrun_throughsourceruntime():
+    # Read the current file path
+    with open("temp/currentfile.txt", "r", encoding="utf-8") as dhamaka:
+        pathway = dhamaka.read().strip()
+        print(pathway)
+        if len(str(pathway)) < 2:
+            save_file_as()
+            return
+
+    # Check save-before-run setting
+    with open("settings/savebeforerun.txt", "r", encoding="utf-8") as dha:
+        saveornot = dha.read()
+    if saveornot == "Y":
+        save_file()
+
+    full_path = os.path.abspath(pathway)
+    current_dir = os.getcwd()
+    script_dir = os.path.dirname(full_path)
+
+    def run_in_thread():
+        import io, contextlib, traceback
+        # Fresh isolated namespace each run — like running from terminal
+        namespace = {
+            "__name__": "__main__",
+            "__builtins__": __builtins__,
+            "__file__": full_path,
+        }
+        modules_before = set(sys.modules.keys())
+        os.chdir(script_dir)
+        try:
+            with open(full_path, "r", encoding="utf-8") as f:
+                code = f.read()
+            stdout_capture = io.StringIO()
+            with contextlib.redirect_stdout(stdout_capture):
+                exec(compile(code, full_path, "exec"), namespace)
+            output = stdout_capture.getvalue()
+            if output:
+                print(output)  # replace with your IDE output panel
+        except Exception:
+            print(traceback.format_exc())  # replace with your IDE output panel
+        finally:
+            # Clean up any modules the user's script imported
+            for mod in set(sys.modules.keys()) - modules_before:
+                del sys.modules[mod]
+            os.chdir(current_dir)
+
+    """Method 1: subprocess.call() had some errors"""
+    #result = subprocess.call(["python", os.path.basename(full_path)])
+    #if result != 0:
+    #    save_file_as()
+    #else:
+    #    messagebox.showinfo("Task Preview", "Code ran successfully.")
+    """Method 2: os.startfile() works but limited"""
+    #os.startfile(full_path)
+    """Method 3: Using cmd (current preferred method)"""
+    #subprocess.call(f'start cmd /K python "{full_path}"', shell=True)
+    """Method 4: In-process exec() — fresh namespace each run, isolated like terminal.
+    Runs in a daemon thread so the IDE UI stays responsive during execution.
+    The thread genuinely runs on a separate core if using a free-threaded Python
+    build (3.13t / 3.14t) where the GIL is disabled (sys._is_gil_enabled() == False).
+    On a standard GIL build it still keeps the UI unblocked via context switching."""
+    t = threading.Thread(target=run_in_thread, daemon=True)
+    t.start()
+
 
 # -----------------
 # Code For Buttons
@@ -3524,12 +3684,12 @@ for child in window.winfo_children():
     if isinstance(child, tk.Label):
         child.configure(background=config_data['background'])
 
+# This function is used to mask the delayed start of the main editor
 try:
     process = subprocess.Popen(["starterspash.exe"])
     process.wait()
 except Exception: # This is used for people who are building from source and don't have .exe
-    process = subprocess.Popen(["python", "starterspash.py"])
-    process.wait()
+    build_exe("starterspash.py","starterspash.exe", True)
 
 # Use Config Data Entered by user
 with open("settings/userconfig.py", "r") as setfil:
