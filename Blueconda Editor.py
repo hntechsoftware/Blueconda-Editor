@@ -153,7 +153,7 @@ def build_exe(script_path, AppToLaunch, EnableWait:bool):
     
     label = tk.Label(popup, text="Install Manager", font=("Arial", 10, "bold"))
     label.pack(pady=5)
-    label2 = tk.Label(popup, text="Please wait whilst Blueconda does some maintenance", font=("Arial", 6, "bold"))
+    label2 = tk.Label(popup, text="Please wait whilst Blueconda does some maintenance (Do not close this window!)", font=("Arial", 6, "bold"))
     label2.pack(pady=5)
 
     progress = ttk.Progressbar(popup, mode='indeterminate', length=300)
@@ -204,6 +204,7 @@ def build_exe(script_path, AppToLaunch, EnableWait:bool):
         sys.executable, "-m", "PyInstaller", 
         "--onefile", 
         "--clean",
+        "--noconsole",
         "--distpath", script_dir, 
         script_path,
     ]
@@ -226,6 +227,7 @@ def build_exe(script_path, AppToLaunch, EnableWait:bool):
         # Using a wrapper function bc of common Race Hazard issues
         # with both compiler and exe trying to access same file at once
         popup.after(1200, close_exe_routine)
+        # Edit, I found the race hazard was a wasted rabbit hole, the bug was elsewhere
     else:
         output_text.insert(tk.END, "\nERROR: Build failed.")
 
@@ -341,6 +343,7 @@ def newline():
 # In the below function is the first mention of a Toplevel. It is a subwindow.
 # There are many subwindows for Blueconda. There is a general code I use for all 
 # subwindows as specified here:
+# This doesn't include the Install manager (thats more utilarian than usage-oriented)
 #
 #    win = tk.Toplevel()                            Declare Window
 #    win.attributes('-topmost', True)               Set Window on top
@@ -1869,59 +1872,127 @@ def removeautocorrect():
 Xbutton = tb.Button(master=window, text="✕", command= removeautocorrect, bootstyle="link")
 update_button_position() # Initial placement 
 
-def resolve_object(obj):
-    """Attempts to resolve a string object to its actual reference."""
-    if isinstance(obj, str):
-        try:
-            # Check if it's a built-in function or keyword
-            if obj in dir(builtins):
-                return getattr(builtins, obj)
-            return eval(obj)  # Use eval to resolve object reference
-        except (NameError, AttributeError, SyntaxError):
-            pass  # Fall back if resolution fails
-    return obj
 
-# Dictionary to store definitions for different types
 type_definitions = {
-    "MODULE": "A collection of related functions, classes, and variables.",
-    "VARIABLE": "An item in your code that stores a value within it.\nFor example: x = 5.\nThe variable x has the value 5.",
-    "CLASS": "A blueprint for creating objects, defining attributes and methods.",
-    "FUNCTION": "A block of organized, reusable code that performs a specific task.",
-    "METHOD": "A function that is associated with an object (usually a class instance).",
-    "BUILTIN": "A function or method that is part of the Python language itself.\nFor example: print() or len().",
-    "GENERATOR FUNCTION": "A function that produces a sequence of values using the 'yield' keyword.",
-    "COROUTINE FUNCTION": "A function that can suspend and resume its execution (often used with 'async' and 'await').",
-    "ASYNC GENERATOR FUNCTION": "An asynchronous function that produces a sequence of values using 'async' and 'yield'.",
-    "GENERATOR": "An object that can iterate over a sequence of values produced by a generator function.",
-    "COROUTINE": "An object representing a suspended computation that can be resumed.",
+    "VARIABLE": "A named reference to a value.",
+    "MODULE": "An imported Python module.",
+    "CLASS": "A class definition / blueprint for objects.",
+    "ABSTRACT BASE CLASS": "A class that cannot be instantiated directly.",
+    "FUNCTION": "A regular Python function.",
+    "METHOD": "A function bound to a class instance.",
+    "BUILTIN": "A built-in function or method implemented in C.",
+    "GENERATOR FUNCTION": "A function that returns a generator when called.",
+    "COROUTINE FUNCTION": "An async function defined with 'async def'.",
+    "ASYNC GENERATOR FUNCTION": "An async function that yields values.",
+    "GENERATOR": "An iterator produced by a generator function.",
+    "COROUTINE": "An object produced by calling a coroutine function.",
     "AWAITABLE": "An object that can be used in an 'await' expression.",
-    "FRAME": "An execution frame, representing a call stack.",
-    "TRACEBACK": "Information about the call stack when an exception occurs.",
-    "CODE OBJECT": "A representation of compiled Python source code.",
-    "DATA DESCRIPTOR": "An object with '__get__', '__set__', and/or '__delete__' methods (e.g., properties).",
-    "GETSET DESCRIPTOR": "An object with get and set methods implemented in C (often for built-in types).",
-    "MEMBER DESCRIPTOR": "An object representing a member (like a slot) of a class.",
-    "ABSTRACT BASE CLASS": "A class that cannot be instantiated and is meant to be subclassed.",
-    "METHOD WRAPPER": "A wrapper around a method of a built-in type.",
-    "CALLABLE": "An object that can be called (like a function).",
-    "OTHER": "A type that could not be specifically identified."
+    "FRAME": "A stack frame object.",
+    "TRACEBACK": "A traceback object.",
+    "CODE OBJECT": "A compiled code object.",
+    "DATA DESCRIPTOR": "A descriptor implementing both __get__ and __set__.",
+    "GETSET DESCRIPTOR": "A C-level attribute descriptor.",
+    "MEMBER DESCRIPTOR": "A descriptor for a slot member.",
+    "METHOD WRAPPER": "A bound wrapper around a slot method.",
+    "CALLABLE": "An object that can be called like a function.",
+    "UNDEFINED": "This name could not be resolved in the current scope.",
+    "OTHER": "Definition not found.",
 }
-
-def showdefinition(object_type):
-    """Displays the definition for a given object type."""
-    definition = type_definitions.get(object_type, "Definition not found.")
-    messagebox.showinfo(f"Definition of {object_type}", f"{object_type}: {definition}")
-
-def get_object_type(obj):
-    """Determines the type of a Python object using inspect."""
-    obj = resolve_object(obj)  # Ensure obj is resolved
-
-    if obj in variables:
+ 
+ 
+def resolve_object(name):
+    """
+    Resolves a (possibly dotted, e.g. 'obj.attr.method') name typed in the
+    editor to the actual Python object it refers to.
+ 
+    Lookup order for the root name: tracked `variables` -> module globals()
+    -> builtins. Each subsequent '.'-separated part is resolved with
+    getattr(). Returns the resolved object, or None if it can't be found.
+    """
+    if not name:
+        return None
+ 
+    parts = name.split('.')
+    root = parts[0]
+ 
+    if isinstance(variables, dict) and root in variables:
+        # variables is a name -> value dict; use the stored value directly.
+        obj = variables[root]
+    elif root in variables or root in globals():
+        # variables is a list/set/tuple of tracked names (or not tracked
+        # at all) - the actual value still needs to come from globals().
+        if root not in globals():
+            return None
+        obj = globals()[root]
+    elif hasattr(builtins, root):
+        obj = getattr(builtins, root)
+    else:
+        return None
+ 
+    for attr in parts[1:]:
+        try:
+            obj = getattr(obj, attr)
+        except AttributeError:
+            return None
+ 
+    return obj
+ 
+ 
+def showdefinition(title, content=None):
+    """
+    Displays info in a styled Toplevel popup (instead of a messagebox), to
+    match the rest of the app's window styling.
+ 
+    Backwards-compatible mode: if `content` is None, `title` is treated as
+    an object-type key (e.g. "FUNCTION") and looked up in type_definitions.
+    Otherwise `title`/`content` are shown directly, which is how the
+    Declaration/Documentation/Methods entries use it.
+    """
+    if content is None:
+        object_type = title
+        content = type_definitions.get(object_type, "Definition not found.")
+        title = f"Definition of {object_type}"
+        content = f"{object_type}: {content}"
+ 
+    win = tk.Toplevel()
+    win.attributes('-topmost', True)
+    win.attributes("-alpha", 0.9)
+    win.geometry("420x260")
+    win.configure(bg=config_data["background"])
+    win.title(title)
+ 
+    text_box = tk.Text(
+        win,
+        wrap="word",
+        bg=config_data["background"],
+        fg=config_data.get("foreground", "white"),
+        relief="flat",
+        borderwidth=0,
+        font=("Consolas", 11),
+    )
+    text_box.insert("1.0", content)
+    text_box.configure(state="disabled")
+    text_box.pack(fill="both", expand=True, padx=12, pady=12)
+ 
+    pywinstyles.change_header_color(win, color=config_data['background'])
+    maximize_minimize_button.hide(win)
+ 
+ 
+def get_object_type(word):
+    """Determines the type of the object that `word` refers to."""
+    if word in variables:
         return "VARIABLE"
-    if inspect.ismodule(obj):
+ 
+    obj = resolve_object(word)
+ 
+    if obj is None:
+        return "UNDEFINED"
+    elif inspect.ismodule(obj):
         return "MODULE"
     elif inspect.isclass(obj):
-        return "CLASS"
+        # isabstract() only makes sense for classes, and isclass() would
+        # otherwise always win first, so check it here.
+        return "ABSTRACT BASE CLASS" if inspect.isabstract(obj) else "CLASS"
     elif inspect.isfunction(obj):
         return "FUNCTION"
     elif inspect.ismethod(obj):
@@ -1952,95 +2023,129 @@ def get_object_type(obj):
         return "GETSET DESCRIPTOR"
     elif inspect.ismemberdescriptor(obj):
         return "MEMBER DESCRIPTOR"
-    elif inspect.isabstract(obj):
-        return "ABSTRACT BASE CLASS"
     elif isinstance(obj, types.MethodWrapperType):
         return "METHOD WRAPPER"
     elif callable(obj):
         return "CALLABLE"
     else:
         return "OTHER"
-
+ 
+ 
 def show_context_menu(event):
     """Shows the context menu on a right-click."""
     text_widget = event.widget
     x, y = event.x_root, event.y_root
-
+ 
     # Get the index of the character at the click position
     index = text_widget.index(f"@{event.x},{event.y}")
-
+ 
     # Extract the word at the clicked position
     word, word_color = get_word_at_index(text_widget, index)
-    # Weird error here, word_color returned is a tuple with the last element being the color
-    # but since it works I'll leave it as it is :)
-
-    if word: # TODO This only shows a few types, function etc not here? (OTHER shown), and finish it
-        # Create the context menu
-        context_menu = tk.Menu(text_widget, tearoff=0)
-        bold_font = tkfont.Font(weight="bold", size=20, family="Consolas")
-        try:                                                            # Need to use last element of tuple
-            context_menu.add_command(label=f"{word}", font=bold_font, foreground=word_color[-1:])
-        except: # Accounting for when it has no applied color
-            context_menu.add_command(label=f"{word}", font=bold_font)
-        context_menu.add_command(label=f"Type: {get_object_type(word)}", command=lambda: showdefinition(get_object_type(word)))
-        context_menu.add_command(label=f"Declaration")
-        context_menu.add_command(label=f"Documentation")
-        context_menu.add_command(label=f"Methods/Attributes")
-        # Display the menu
-        context_menu.post(x, y)
-
+ 
+    if not word:
+        return
+ 
+    obj = resolve_object(word)
+    obj_type = get_object_type(word)
+ 
+    def show_declaration():
+        if obj is None:
+            content = f"'{word}' could not be resolved in the current scope."
+        elif inspect.isroutine(obj) or inspect.isclass(obj):
+            try:
+                content = f"{word}{inspect.signature(obj)}"
+            except (TypeError, ValueError):
+                content = f"{word}(...)  (signature unavailable)"
+        else:
+            content = f"{word} = {obj!r}"
+        showdefinition(f"Declaration of {word}", content)
+ 
+    def show_documentation():
+        if obj is None:
+            content = f"'{word}' could not be resolved in the current scope."
+        else:
+            content = inspect.getdoc(obj) or "No documentation available."
+        showdefinition(f"Documentation for {word}", content)
+ 
+    def show_members():
+        if obj is None:
+            content = f"'{word}' could not be resolved in the current scope."
+        else:
+            members = [m for m in dir(obj) if not m.startswith('__')]
+            content = "\n".join(members) if members else "No public methods/attributes."
+        showdefinition(f"Methods/Attributes of {word}", content)
+ 
+    # Create the context menu
+    context_menu = tk.Menu(text_widget, tearoff=0)
+    bold_font = tkfont.Font(weight="bold", size=20, family="Consolas")
+    try:
+        # word_color[-1] is the current value in the tag_config tuple;
+        # word_color[-1:] (a 1-item tuple) was being passed before, which
+        # is not a valid Tk color and always fell into the except branch.
+        context_menu.add_command(label=f"{word}", font=bold_font, foreground=word_color[-1])
+    except (TypeError, IndexError):
+        # No color tag applied to this word
+        context_menu.add_command(label=f"{word}", font=bold_font)
+ 
+    context_menu.add_command(
+        label=f"Type: {obj_type}",
+        command=lambda: showdefinition(obj_type)
+    )
+    context_menu.add_command(label="Declaration", command=show_declaration)
+    context_menu.add_command(label="Documentation", command=show_documentation)
+    context_menu.add_command(label="Methods/Attributes", command=show_members)
+ 
+    # Display the menu
+    context_menu.post(x, y)
+ 
+ 
 def get_word_at_index(text_widget, index):
     """
     Extracts the 'word' and its foreground color at the given text index,
     handling dots and underscores.
-
+ 
     Args:
         text_widget: The tkinter.Text widget.
         index: The index of the character.
-
+ 
     Returns:
         A tuple containing the extracted word (str) and its foreground color (str or None).
     """
     start_index = index
     end_index = index
-
+ 
     # Scan backward for word start
     while True:
-        prev_index = text_widget.index(f"{start_index}-1c")
         if start_index == "1.0":
             break
+        prev_index = text_widget.index(f"{start_index}-1c")
         char = text_widget.get(prev_index, start_index)
-        if not (char.isalnum() or char in ['.', '_']):
+        if not (char.isalnum() or char in ('.', '_')):
             break
         start_index = prev_index
-
+ 
     # Scan forward for word end
     while True:
         next_index = text_widget.index(f"{end_index}+1c")
-        if next_index == f"{text_widget.index('end-1c')}+1c":
+        if next_index == f"{text_widget.index('end-1c')}+1c" or next_index == end_index:
             break
         char = text_widget.get(end_index, next_index)
-        if not (char.isalnum() or char in ['.', '_']):
+        if not (char.isalnum() or char in ('.', '_')):
             break
         end_index = next_index
-
-    # Extract the word
+ 
+    # Extract the word. Note: parentheses can never end up in `word` since
+    # the scans above only ever include alnum/./_ characters, so the old
+    # parenthesis-stripping logic here was dead code and has been removed.
     word = text_widget.get(start_index, end_index)
-
-    # Remove surrounding parentheses
-    if word.startswith('(') and word.endswith(')'):
-        word = word[1:-1]
-    elif '(' in word:
-        word = word.split('(')[0]
-    elif ')' in word:
-        word = word.split(')')[0]
-
+ 
     # Get the color at the start of the word
     color = get_text_color(text_widget, start_index)
-
+ 
     return word, color
-
-def get_text_color(text_widget, index): # TODO color can be used for better type management, and more info eg: module desc
+ 
+ 
+def get_text_color(text_widget, index):
     """
     Gets the foreground color of the text at the given index in the Text widget.
     """
@@ -2050,6 +2155,8 @@ def get_text_color(text_widget, index): # TODO color can be used for better type
         if 'foreground' in config:
             return config['foreground']
     return None
+ 
+
 
 usertext.bind("<Button-3>", show_context_menu)
 
@@ -2919,7 +3026,13 @@ def tip(): # TODO Does not appear in EXE??
     pywinstyles.change_header_color(newwin, color=config_data['background'])
     maximize_minimize_button.hide(newwin) # looks cleaner
 
-
+# Code for GUIBuilder runner
+def guibuilder():
+    try:
+        process = subprocess.Popen(["GUIBuilder.exe"])
+        # process.wait() commenting this out keeps the UI active whilst GUIbuilder is open
+    except Exception: # This is used for people who are building from source and don't have .exe
+        build_exe("GUIBuilder.py","GUIBuilder.exe", False)
 
 # Code for Execute: 
 def pythonrun():
@@ -3154,7 +3267,7 @@ treefilebutton.grid(row=0,column=11,padx=3)
 # Launch GUI builder
 guifile= tk.PhotoImage(file='src/gui.png')
 guifilelabel= tk.Label(image=guifile)
-guifilebutton= tk.Button(C, image=guifile,  cursor="dot",
+guifilebutton= tk.Button(C, image=guifile,  cursor="dot", command=guibuilder,
 borderwidth=0,highlightthickness = 0,bd = 0,bg = config_data['background'],activebackground = config_data['background'], autostyle=False)
 guifilebutton.grid(row=0,column=12,padx=3)
 

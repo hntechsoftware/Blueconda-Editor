@@ -4,57 +4,206 @@ from tkinter import ttk
 from ttkbootstrap.dialogs.dialogs import FontDialog
 from tkinter.colorchooser import askcolor
 
+# ----------------------------------------------------------------------------
+# Shared look & feel constants
+# ----------------------------------------------------------------------------
+BG_PAGE = "#f4f6f9"
+BG_CARD = "#ffffff"
+FG_HEADER = "#2c3e50"
+FONT_HEADER = ("Segoe UI", 18, "bold")
+FONT_SECTION = ("Segoe UI", 11, "bold")
+FONT_BODY = ("Segoe UI", 10)
+FONT_HINT = ("Segoe UI", 9)
+FONT_CODE = ("Cascadia Code", 10)
+
+DEFAULT_FONT_DICT = {
+    "family": "TkDefaultFont",
+    "size": 12,
+    "weight": "normal",
+    "slant": "roman",
+    "underline": 0,
+    "overstrike": 0,
+}
+
 root = tb.Window(themename="cerculean")
 root.title("GUIBuilder")
 root.geometry("1500x1000")
+root.minsize(1150, 750)
 
 nbk = tb.Notebook(root, bootstyle="success")
 
-# create frames
-frame1 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame2 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame3 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame4 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame5 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame6 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame7 = tk.Frame(nbk, width=300, height=600, bg="white")
-frame8 = tk.Frame(nbk, width=300, height=600, bg="white")
 
+# ----------------------------------------------------------------------------
+# Small helpers used by every tab so the layout stays consistent everywhere
+# ----------------------------------------------------------------------------
+def make_font_tuple(font_dict):
+    """Turn a font.Font().actual() style dict into a plain tkinter font tuple."""
+    family = font_dict.get("family", "TkDefaultFont")
+    try:
+        size = int(font_dict.get("size", 12))
+    except (TypeError, ValueError):
+        size = 12
+    styles = []
+    if str(font_dict.get("weight", "normal")).lower() == "bold":
+        styles.append("bold")
+    if str(font_dict.get("slant", "roman")).lower() == "italic":
+        styles.append("italic")
+    if int(font_dict.get("underline", 0) or 0):
+        styles.append("underline")
+    if int(font_dict.get("overstrike", 0) or 0):
+        styles.append("overstrike")
+    if styles:
+        return (family, size, " ".join(styles))
+    return (family, size)
+
+
+def pick_font(parent_widget, font_state):
+    """Open the FontDialog, apply the result to parent_widget and update
+    font_state (a dict) in place. Returns True if a font was chosen."""
+    fd = FontDialog(parent=root)
+    fd.show()
+    if fd.result is None:
+        return False
+    parent_widget.config(font=fd.result)
+    font_state.update(fd.result.actual())
+    return True
+
+
+def pick_colors(widget):
+    colors = askcolor(title="Change Text Colour")
+    if colors[1]:
+        widget.configure(foreground=colors[1])
+    colors2 = askcolor(title="Change Background Colour")
+    if colors2[1]:
+        widget.config(background=colors2[1])
+
+
+def build_tab_shell(parent_frame, title):
+    """Creates the common page header + two-column (controls / preview) shell
+    that every tab uses, and returns (controls_frame, preview_frame)."""
+    container = tk.Frame(parent_frame, bg=BG_PAGE)
+    container.pack(fill=tk.BOTH, expand=True)
+
+    tk.Label(container, text=title, font=FONT_HEADER, bg=BG_PAGE, fg=FG_HEADER).pack(
+        anchor="w", padx=25, pady=(20, 15)
+    )
+
+    body = tk.Frame(container, bg=BG_PAGE)
+    body.pack(fill=tk.BOTH, expand=True, padx=25, pady=(0, 25))
+    body.columnconfigure(0, weight=3, uniform="col")
+    body.columnconfigure(1, weight=2, uniform="col")
+    body.rowconfigure(0, weight=1)
+
+    controls = tb.Labelframe(body, text="  Settings  ", bootstyle="primary", padding=20)
+    controls.grid(row=0, column=0, sticky="nsew", padx=(0, 15))
+    controls.columnconfigure(0, weight=1)
+
+    right = tk.Frame(body, bg=BG_PAGE)
+    right.grid(row=0, column=1, sticky="nsew")
+    right.rowconfigure(0, weight=3)
+    right.rowconfigure(1, weight=2)
+    right.columnconfigure(0, weight=1)
+
+    preview = tb.Labelframe(right, text="  Preview  ", bootstyle="success", padding=20)
+    preview.grid(row=0, column=0, sticky="nsew", pady=(0, 15))
+
+    code_frame = tb.Labelframe(right, text="  Generated Code  ", bootstyle="secondary", padding=15)
+    code_frame.grid(row=1, column=0, sticky="nsew")
+
+    return controls, preview, code_frame
+
+
+def add_code_box(code_frame, height=10):
+    box = tk.Text(code_frame, height=height, autostyle=False, borderwidth=1,
+                   relief="solid", font=FONT_CODE, wrap="none")
+    box.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+    btn_row = tk.Frame(code_frame, bg=BG_CARD)
+    btn_row.pack(fill=tk.X)
+
+    def copy_code():
+        root.clipboard_clear()
+        root.clipboard_append(box.get(1.0, tk.END).strip())
+
+    return box, btn_row, copy_code
+
+
+# ----------------------------------------------------------------------------
+# create frames (one per tab)
+# ----------------------------------------------------------------------------
+frame1 = tk.Frame(nbk, bg=BG_PAGE)
+frame2 = tk.Frame(nbk, bg=BG_PAGE)
+frame3 = tk.Frame(nbk, bg=BG_PAGE)
+frame4 = tk.Frame(nbk, bg=BG_PAGE)
+frame5 = tk.Frame(nbk, bg=BG_PAGE)
+frame6 = tk.Frame(nbk, bg=BG_PAGE)
+frame7 = tk.Frame(nbk, bg=BG_PAGE)
+frame8 = tk.Frame(nbk, bg=BG_PAGE)
+
+# =============================================================================
 # Frame 1: Label
-frameforlabel = tk.Frame(frame1, width=600, height=700)
-testlabel = tk.Label(frameforlabel, text="Label Looks like This", autostyle=False)
-testlabel.grid(row=0, column=2, sticky="E")
-frameforlabel.grid(row=0, column=2, sticky="E", rowspan=5)
+# =============================================================================
+controls1, preview1, code_area1 = build_tab_shell(frame1, "Label Builder")
 
-tk.Label(frame1, text="Size:", font=("Arial", 16)).grid(row=0, column=1)
-tk.Label(frame1, text="Note: Size slider and font selection should be used independently.", 
-         font=("Arial", 10)).grid(row=2, column=1)
+testlabel = tk.Label(preview1, text="Label Looks like This", autostyle=False, font=("TkDefaultFont", 12))
+testlabel.pack(expand=True)
 
-currentfont = ("TkDefaultFont", 12)
+currentfont = dict(DEFAULT_FONT_DICT)
+
+r = 0
+tk.Label(controls1, text="Text", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+text_row = tk.Frame(controls1); text_row.grid(row=r, column=0, sticky="ew", pady=(4, 15)); r += 1
+text_row.columnconfigure(0, weight=1)
+TextEntry = tk.Entry(text_row)
+TextEntry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+TextEntry.insert(0, "Enter Text Here")
+
+
+def changelabeltext():
+    testlabel.config(text=TextEntry.get())
+
+
+tb.Button(text_row, text="Apply", command=changelabeltext, bootstyle="secondary").grid(row=0, column=1)
+
+tk.Label(controls1, text="Font Size", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+tk.Label(controls1, text="Drag to resize live, or pick an exact font below.",
+         font=FONT_HINT, fg="#7f8c8d").grid(row=r, column=0, sticky="w", pady=(0, 6)); r += 1
+
+current_value = tk.DoubleVar(value=12)
+
+
+def slider_changed(event=None):
+    currentfont["size"] = round(sizeslider.get())
+    testlabel.configure(font=make_font_tuple(currentfont))
+
+
+sizeslider = ttk.Scale(controls1, from_=8, to=48, orient="horizontal",
+                        variable=current_value, command=slider_changed)
+sizeslider.grid(row=r, column=0, sticky="ew", pady=(0, 15)); r += 1
+
+btn_row1 = tk.Frame(controls1); btn_row1.grid(row=r, column=0, sticky="ew", pady=(0, 15)); r += 1
+btn_row1.columnconfigure((0, 1), weight=1)
+
 
 def fontforlabel():
-    fd = FontDialog()
-    fd.show()
-    testlabel.config(font=fd.result)
-    global currentfont
-    currentfont = tuple(fd.result)
+    if pick_font(testlabel, currentfont):
+        current_value.set(currentfont["size"])
 
-tb.Button(frame1, text="     Choose Font     ", command=fontforlabel).grid(row=5, column=1, pady=50)
 
 def colorforlabel():
-    colors = askcolor(title="Change Text colour")
-    if colors[1]:
-        testlabel.configure(foreground=colors[1])
-    colors2 = askcolor(title="Change Background colour")
-    if colors2[1]:
-        testlabel.config(background=colors2[1])
+    pick_colors(testlabel)
 
-tb.Button(frame1, text="    Choose Colors   ", command=colorforlabel).grid(row=6, column=1, pady=10)
+
+tb.Button(btn_row1, text="Choose Font", command=fontforlabel).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+tb.Button(btn_row1, text="Choose Colors", command=colorforlabel).grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+codebox1, codebtns1, copy1 = add_code_box(code_area1)
+
 
 def generatelabelcode():
-    labelfont = currentfont
-    labelfg = testlabel.cget("foreground")
-    labelbg = testlabel.cget("background")
+    labelfont = make_font_tuple(currentfont)
+    labelfg = testlabel.cget("foreground") or "black"
+    labelbg = testlabel.cget("background") or "SystemButtonFace"
     labeltext = testlabel.cget("text")
     codeforlabel = f'''my_label = tk.Label(
     master=root, text="{labeltext}",
@@ -64,71 +213,95 @@ my_label.pack()'''
     codebox1.delete(1.0, tk.END)
     codebox1.insert(1.0, codeforlabel)
 
-def slider_changed(event):
-    global currentfont
-    textsize = sizeslider.get()
-    size2 = round(textsize)
-    if currentfont:
-        wefont = currentfont[0] if isinstance(currentfont, tuple) else currentfont
-        new_font = (wefont, size2)
-        testlabel.configure(font=new_font)
 
-current_value = tk.DoubleVar()
-style = ttk.Style()
-style.configure('Custom.Horizontal.TScale', background='#c7e5fc')
-sizeslider = ttk.Scale(frame1, from_=10, to=30, orient='horizontal',
-                       variable=current_value, command=slider_changed, length=200)
-sizeslider.grid(row=1, column=1, padx=300)
+tb.Button(codebtns1, text="Generate Code", command=generatelabelcode, bootstyle="success").pack(side="left")
+tb.Button(codebtns1, text="Copy", command=copy1, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
 
-codebox1 = tk.Text(frame1, width=50, height=12, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox1.grid(row=9, column=1, pady=10)
-tb.Button(frame1, text="    Generate Code   ", command=generatelabelcode).grid(row=10, column=1, pady=0)
-
-def changelabeltext():
-    newtext = TextEntry.get()
-    testlabel.config(text=newtext)
-
-tb.Button(frame1, text="     Change Text    ", command=changelabeltext).grid(row=8, column=1, pady=0)
-TextEntry = tk.Entry(frame1, width=16)
-TextEntry.grid(row=7, column=1)
-TextEntry.insert(0, "Enter Text Here")
-
+# =============================================================================
 # Frame 2: Button
-frameforbutton = tk.Frame(frame2, width=600, height=700)
-testbutton = tk.Button(frameforbutton, text="Click Me!", autostyle=False)
-testbutton.grid(row=0, column=2, sticky="E", padx=20, pady=20)
-frameforbutton.grid(row=0, column=2, sticky="E", rowspan=5)
+# =============================================================================
+controls2, preview2, code_area2 = build_tab_shell(frame2, "Button Builder")
 
-tk.Label(frame2, text="Size:", font=("Arial", 16)).grid(row=0, column=1)
-tk.Label(frame2, text="Note: Size slider and font selection should be used independently.", 
-         font=("Arial", 10)).grid(row=2, column=1)
+testbutton = tk.Button(preview2, text="Click Me!", autostyle=False, font=("TkDefaultFont", 12))
+testbutton.pack(expand=True)
 
-currentfont_btn = ("TkDefaultFont", 12)
+currentfont_btn = dict(DEFAULT_FONT_DICT)
+
+r = 0
+tk.Label(controls2, text="Text", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+btn_text_row = tk.Frame(controls2); btn_text_row.grid(row=r, column=0, sticky="ew", pady=(4, 15)); r += 1
+btn_text_row.columnconfigure(0, weight=1)
+btnTextEntry = tk.Entry(btn_text_row)
+btnTextEntry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+btnTextEntry.insert(0, "Enter Text Here")
+
+
+def changebuttontext():
+    testbutton.config(text=btnTextEntry.get())
+
+
+tb.Button(btn_text_row, text="Apply", command=changebuttontext, bootstyle="secondary").grid(row=0, column=1)
+
+tk.Label(controls2, text="Font Size", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+tk.Label(controls2, text="Drag to resize live, or pick an exact font below.",
+         font=FONT_HINT, fg="#7f8c8d").grid(row=r, column=0, sticky="w", pady=(0, 6)); r += 1
+
+current_value_btn = tk.DoubleVar(value=12)
+
+
+def btnslider_changed(event=None):
+    currentfont_btn["size"] = round(btnsizeslider.get())
+    testbutton.configure(font=make_font_tuple(currentfont_btn))
+
+
+btnsizeslider = ttk.Scale(controls2, from_=8, to=48, orient="horizontal",
+                           variable=current_value_btn, command=btnslider_changed)
+btnsizeslider.grid(row=r, column=0, sticky="ew", pady=(0, 15)); r += 1
+
+btn_row2 = tk.Frame(controls2); btn_row2.grid(row=r, column=0, sticky="ew", pady=(0, 15)); r += 1
+btn_row2.columnconfigure((0, 1), weight=1)
+
 
 def fontforbutton():
-    fd = FontDialog()
-    fd.show()
-    testbutton.config(font=fd.result)
-    global currentfont_btn
-    currentfont_btn = tuple(fd.result)
+    if pick_font(testbutton, currentfont_btn):
+        current_value_btn.set(currentfont_btn["size"])
 
-tb.Button(frame2, text="     Choose Font     ", command=fontforbutton).grid(row=5, column=1, pady=50)
 
 def colorforbutton():
-    colors = askcolor(title="Change Text colour")
-    if colors[1]:
-        testbutton.configure(foreground=colors[1])
-    colors2 = askcolor(title="Change Background colour")
-    if colors2[1]:
-        testbutton.config(background=colors2[1])
+    pick_colors(testbutton)
 
-tb.Button(frame2, text="    Choose Colors   ", command=colorforbutton).grid(row=6, column=1, pady=10)
+
+tb.Button(btn_row2, text="Choose Font", command=fontforbutton).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+tb.Button(btn_row2, text="Choose Colors", command=colorforbutton).grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+tk.Label(controls2, text="Dimensions", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+dim_row = tk.Frame(controls2); dim_row.grid(row=r, column=0, sticky="ew", pady=(4, 15)); r += 1
+tk.Label(dim_row, text="Width").grid(row=0, column=0, sticky="w")
+btnWidthEntry = tk.Entry(dim_row, width=6)
+btnWidthEntry.grid(row=0, column=1, padx=(6, 20))
+btnWidthEntry.insert(0, "10")
+tk.Label(dim_row, text="Height").grid(row=0, column=2, sticky="w")
+btnHeightEntry = tk.Entry(dim_row, width=6)
+btnHeightEntry.grid(row=0, column=3, padx=(6, 20))
+btnHeightEntry.insert(0, "2")
+
+
+def applybtnsize():
+    try:
+        testbutton.config(width=int(btnWidthEntry.get()), height=int(btnHeightEntry.get()))
+    except ValueError:
+        pass
+
+
+tb.Button(dim_row, text="Apply", command=applybtnsize, bootstyle="secondary").grid(row=0, column=4)
+
+codebox2, codebtns2, copy2 = add_code_box(code_area2)
+
 
 def generatebuttoncode():
-    btnfont = currentfont_btn
-    btnfg = testbutton.cget("foreground")
-    btnbg = testbutton.cget("background")
+    btnfont = make_font_tuple(currentfont_btn)
+    btnfg = testbutton.cget("foreground") or "black"
+    btnbg = testbutton.cget("background") or "SystemButtonFace"
     btntext = testbutton.cget("text")
     btnwidth = testbutton.cget("width")
     btnheight = testbutton.cget("height")
@@ -141,95 +314,62 @@ my_button.pack()'''
     codebox2.delete(1.0, tk.END)
     codebox2.insert(1.0, codeforbutton)
 
-def btnslider_changed(event):
-    global currentfont_btn
-    textsize = btnsizeslider.get()
-    size2 = round(textsize)
-    if currentfont_btn:
-        wefont = currentfont_btn[0] if isinstance(currentfont_btn, tuple) else currentfont_btn
-        new_font = (wefont, size2)
-        testbutton.configure(font=new_font)
 
-current_value_btn = tk.DoubleVar()
-btnsizeslider = ttk.Scale(frame2, from_=10, to=30, orient='horizontal',
-                          variable=current_value_btn, command=btnslider_changed, length=200)
-btnsizeslider.grid(row=1, column=1, padx=300)
+tb.Button(codebtns2, text="Generate Code", command=generatebuttoncode, bootstyle="success").pack(side="left")
+tb.Button(codebtns2, text="Copy", command=copy2, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
 
-codebox2 = tk.Text(frame2, width=50, height=12, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox2.grid(row=9, column=1, pady=10)
-tb.Button(frame2, text="    Generate Code   ", command=generatebuttoncode).grid(row=10, column=1, pady=0)
-
-def changebuttontext():
-    newtext = btnTextEntry.get()
-    testbutton.config(text=newtext)
-
-tb.Button(frame2, text="     Change Text    ", command=changebuttontext).grid(row=8, column=1, pady=0)
-btnTextEntry = tk.Entry(frame2, width=16)
-btnTextEntry.grid(row=7, column=1)
-btnTextEntry.insert(0, "Enter Text Here")
-
-tk.Label(frame2, text="Width:", font=("Arial", 12)).grid(row=11, column=1)
-btnWidthEntry = tk.Entry(frame2, width=10)
-btnWidthEntry.grid(row=12, column=1)
-btnWidthEntry.insert(0, "10")
-
-tk.Label(frame2, text="Height:", font=("Arial", 12)).grid(row=13, column=1)
-btnHeightEntry = tk.Entry(frame2, width=10)
-btnHeightEntry.grid(row=14, column=1)
-btnHeightEntry.insert(0, "2")
-
-def applybtnsize():
-    try:
-        w = int(btnWidthEntry.get())
-        h = int(btnHeightEntry.get())
-        testbutton.config(width=w, height=h)
-    except:
-        pass
-
-tb.Button(frame2, text="   Apply Size   ", command=applybtnsize).grid(row=15, column=1, pady=10)
-
+# =============================================================================
 # Frame 3: Slider
-frameforslider = tk.Frame(frame3, width=600, height=700)
-testslider = ttk.Scale(frameforslider, from_=0, to=100, orient='horizontal', length=200)
-testslider.grid(row=0, column=2, sticky="E", padx=20, pady=20)
-sliderlabel = tk.Label(frameforslider, text="Value: 0", font=("Arial", 12))
-sliderlabel.grid(row=1, column=2)
-frameforslider.grid(row=0, column=2, sticky="E", rowspan=5)
+# =============================================================================
+controls3, preview3, code_area3 = build_tab_shell(frame3, "Slider Builder")
 
-tk.Label(frame3, text="Slider Configuration", font=("Arial", 16)).grid(row=0, column=1)
+slider_preview_wrap = tk.Frame(preview3)
+slider_preview_wrap.pack(expand=True)
+testslider = ttk.Scale(slider_preview_wrap, from_=0, to=100, orient="horizontal", length=250)
+testslider.pack(pady=(0, 10))
+sliderlabel = tk.Label(slider_preview_wrap, text="Value: 0", font=("Segoe UI", 12))
+sliderlabel.pack()
+
+
+def updateslider(val):
+    sliderlabel.config(text=f"Value: {int(float(val))}")
+
+
+testslider.config(command=updateslider)
 
 slider_orient = tk.StringVar(value="horizontal")
 slider_from = tk.DoubleVar(value=0)
 slider_to = tk.DoubleVar(value=100)
 slider_length = tk.IntVar(value=200)
 
-def updateslider(val):
-    sliderlabel.config(text=f"Value: {int(float(val))}")
+r = 0
+tk.Label(controls3, text="Range", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+range_row = tk.Frame(controls3); range_row.grid(row=r, column=0, sticky="ew", pady=(4, 15)); r += 1
+tk.Label(range_row, text="From").grid(row=0, column=0, sticky="w")
+tk.Entry(range_row, width=8, textvariable=slider_from).grid(row=0, column=1, padx=(6, 20))
+tk.Label(range_row, text="To").grid(row=0, column=2, sticky="w")
+tk.Entry(range_row, width=8, textvariable=slider_to).grid(row=0, column=3, padx=(6, 0))
 
-testslider.config(command=updateslider)
+tk.Label(controls3, text="Length (px)", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+tk.Entry(controls3, width=10, textvariable=slider_length).grid(row=r, column=0, sticky="w", pady=(4, 15)); r += 1
 
-tk.Label(frame3, text="From:", font=("Arial", 12)).grid(row=1, column=1, pady=5)
-sliderFromEntry = tk.Entry(frame3, width=10, textvariable=slider_from)
-sliderFromEntry.grid(row=2, column=1)
+tk.Label(controls3, text="Orientation", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+orient_row = tk.Frame(controls3); orient_row.grid(row=r, column=0, sticky="w", pady=(4, 15)); r += 1
+tk.Radiobutton(orient_row, text="Horizontal", variable=slider_orient, value="horizontal").pack(side="left")
+tk.Radiobutton(orient_row, text="Vertical", variable=slider_orient, value="vertical").pack(side="left", padx=(15, 0))
 
-tk.Label(frame3, text="To:", font=("Arial", 12)).grid(row=3, column=1, pady=5)
-sliderToEntry = tk.Entry(frame3, width=10, textvariable=slider_to)
-sliderToEntry.grid(row=4, column=1)
-
-tk.Label(frame3, text="Length:", font=("Arial", 12)).grid(row=5, column=1, pady=5)
-sliderLengthEntry = tk.Entry(frame3, width=10, textvariable=slider_length)
-sliderLengthEntry.grid(row=6, column=1)
-
-tk.Label(frame3, text="Orientation:", font=("Arial", 12)).grid(row=7, column=1, pady=5)
-tk.Radiobutton(frame3, text="Horizontal", variable=slider_orient, value="horizontal").grid(row=8, column=1)
-tk.Radiobutton(frame3, text="Vertical", variable=slider_orient, value="vertical").grid(row=9, column=1)
 
 def applysliderconfig():
-    testslider.config(from_=slider_from.get(), to=slider_to.get(), 
-                      orient=slider_orient.get(), length=slider_length.get())
+    testslider.config(from_=slider_from.get(), to=slider_to.get(),
+                       orient=slider_orient.get(), length=slider_length.get())
 
-tb.Button(frame3, text="  Apply Config  ", command=applysliderconfig).grid(row=10, column=1, pady=20)
+
+tb.Button(controls3, text="Apply Config", command=applysliderconfig, bootstyle="secondary").grid(
+    row=r, column=0, sticky="w", pady=(0, 15)
+); r += 1
+
+codebox3, codebtns3, copy3 = add_code_box(code_area3)
+
 
 def generateslidercode():
     codeforslder = f'''my_slider = ttk.Scale(
@@ -240,71 +380,75 @@ my_slider.pack()'''
     codebox3.delete(1.0, tk.END)
     codebox3.insert(1.0, codeforslder)
 
-codebox3 = tk.Text(frame3, width=50, height=12, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox3.grid(row=11, column=1, pady=10)
-tb.Button(frame3, text="    Generate Code   ", command=generateslidercode).grid(row=12, column=1, pady=0)
 
+tb.Button(codebtns3, text="Generate Code", command=generateslidercode, bootstyle="success").pack(side="left")
+tb.Button(codebtns3, text="Copy", command=copy3, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
+
+# =============================================================================
 # Frame 4: Entry
-frameforentry = tk.Frame(frame4, width=600, height=700)
-testentry = tk.Entry(frameforentry, autostyle=False)
+# =============================================================================
+controls4, preview4, code_area4 = build_tab_shell(frame4, "Entry Builder")
+
+testentry = tk.Entry(preview4, autostyle=False, font=("TkDefaultFont", 12))
 testentry.insert(0, "Sample Entry")
-testentry.grid(row=0, column=2, sticky="E", padx=20, pady=20)
-frameforentry.grid(row=0, column=2, sticky="E", rowspan=5)
+testentry.pack(expand=True)
 
-tk.Label(frame4, text="Entry Configuration", font=("Arial", 16)).grid(row=0, column=1)
+currentfont_entry = dict(DEFAULT_FONT_DICT)
 
-currentfont_entry = ("TkDefaultFont", 12)
+r = 0
+tk.Label(controls4, text="Placeholder Text", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+entry_text_row = tk.Frame(controls4); entry_text_row.grid(row=r, column=0, sticky="ew", pady=(4, 15)); r += 1
+entry_text_row.columnconfigure(0, weight=1)
+entryTextEntry = tk.Entry(entry_text_row)
+entryTextEntry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+entryTextEntry.insert(0, "Placeholder")
 
-def fontforentry():
-    fd = FontDialog()
-    fd.show()
-    testentry.config(font=fd.result)
-    global currentfont_entry
-    currentfont_entry = tuple(fd.result)
 
-tb.Button(frame4, text="     Choose Font     ", command=fontforentry).grid(row=3, column=1, pady=20)
+def changeentrytext():
+    testentry.delete(0, tk.END)
+    testentry.insert(0, entryTextEntry.get())
 
-def colorforentry():
-    colors = askcolor(title="Change Text colour")
-    if colors[1]:
-        testentry.configure(foreground=colors[1])
-    colors2 = askcolor(title="Change Background colour")
-    if colors2[1]:
-        testentry.config(background=colors2[1])
 
-tb.Button(frame4, text="    Choose Colors   ", command=colorforentry).grid(row=4, column=1, pady=10)
+tb.Button(entry_text_row, text="Apply", command=changeentrytext, bootstyle="secondary").grid(row=0, column=1)
 
-tk.Label(frame4, text="Width:", font=("Arial", 12)).grid(row=5, column=1)
-entryWidthEntry = tk.Entry(frame4, width=10)
-entryWidthEntry.grid(row=6, column=1)
+tk.Label(controls4, text="Width", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+width_row4 = tk.Frame(controls4); width_row4.grid(row=r, column=0, sticky="w", pady=(4, 15)); r += 1
+entryWidthEntry = tk.Entry(width_row4, width=8)
+entryWidthEntry.pack(side="left")
 entryWidthEntry.insert(0, "20")
+
 
 def applyentrywidth():
     try:
-        w = int(entryWidthEntry.get())
-        testentry.config(width=w)
-    except:
+        testentry.config(width=int(entryWidthEntry.get()))
+    except ValueError:
         pass
 
-tb.Button(frame4, text="   Apply Width   ", command=applyentrywidth).grid(row=7, column=1, pady=10)
 
-tk.Label(frame4, text="Placeholder Text:", font=("Arial", 12)).grid(row=8, column=1)
-entryTextEntry = tk.Entry(frame4, width=20)
-entryTextEntry.grid(row=9, column=1)
-entryTextEntry.insert(0, "Placeholder")
+tb.Button(width_row4, text="Apply", command=applyentrywidth, bootstyle="secondary").pack(side="left", padx=(8, 0))
 
-def changeentrytext():
-    newtext = entryTextEntry.get()
-    testentry.delete(0, tk.END)
-    testentry.insert(0, newtext)
+btn_row4 = tk.Frame(controls4); btn_row4.grid(row=r, column=0, sticky="ew", pady=(0, 15)); r += 1
+btn_row4.columnconfigure((0, 1), weight=1)
 
-tb.Button(frame4, text="   Change Text   ", command=changeentrytext).grid(row=10, column=1, pady=10)
+
+def fontforentry():
+    pick_font(testentry, currentfont_entry)
+
+
+def colorforentry():
+    pick_colors(testentry)
+
+
+tb.Button(btn_row4, text="Choose Font", command=fontforentry).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+tb.Button(btn_row4, text="Choose Colors", command=colorforentry).grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+codebox4, codebtns4, copy4 = add_code_box(code_area4)
+
 
 def generateentrycode():
-    entryfont = currentfont_entry
-    entryfg = testentry.cget("foreground")
-    entrybg = testentry.cget("background")
+    entryfont = make_font_tuple(currentfont_entry)
+    entryfg = testentry.cget("foreground") or "black"
+    entrybg = testentry.cget("background") or "SystemButtonFace"
     entrywidth = testentry.cget("width")
     codeforentry = f'''my_entry = tk.Entry(
     master=root, width={entrywidth},
@@ -314,29 +458,39 @@ my_entry.pack()'''
     codebox4.delete(1.0, tk.END)
     codebox4.insert(1.0, codeforentry)
 
-codebox4 = tk.Text(frame4, width=50, height=12, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox4.grid(row=11, column=1, pady=10)
-tb.Button(frame4, text="    Generate Code   ", command=generateentrycode).grid(row=12, column=1, pady=0)
 
+tb.Button(codebtns4, text="Generate Code", command=generateentrycode, bootstyle="success").pack(side="left")
+tb.Button(codebtns4, text="Copy", command=copy4, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
+
+# =============================================================================
 # Frame 5: Scrollbar
-frameforscrollbar = tk.Frame(frame5, width=600, height=700)
-testscrollbar = tk.Scrollbar(frameforscrollbar, orient='vertical')
-testscrollbar.grid(row=0, column=2, sticky="NS", padx=20, pady=20)
-frameforscrollbar.grid(row=0, column=2, sticky="E", rowspan=5)
+# =============================================================================
+controls5, preview5, code_area5 = build_tab_shell(frame5, "Scrollbar Builder")
 
-tk.Label(frame5, text="Scrollbar Configuration", font=("Arial", 16)).grid(row=0, column=1)
+testscrollbar = tk.Scrollbar(preview5, orient="vertical")
+testscrollbar.pack(expand=True, fill="y", pady=20)
 
 scrollbar_orient = tk.StringVar(value="vertical")
 
-tk.Label(frame5, text="Orientation:", font=("Arial", 12)).grid(row=1, column=1, pady=10)
-tk.Radiobutton(frame5, text="Vertical", variable=scrollbar_orient, value="vertical").grid(row=2, column=1)
-tk.Radiobutton(frame5, text="Horizontal", variable=scrollbar_orient, value="horizontal").grid(row=3, column=1)
+r = 0
+tk.Label(controls5, text="Orientation", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+orient_row5 = tk.Frame(controls5); orient_row5.grid(row=r, column=0, sticky="w", pady=(4, 15)); r += 1
+tk.Radiobutton(orient_row5, text="Vertical", variable=scrollbar_orient, value="vertical").pack(side="left")
+tk.Radiobutton(orient_row5, text="Horizontal", variable=scrollbar_orient, value="horizontal").pack(
+    side="left", padx=(15, 0)
+)
+
 
 def applyscrollbarconfig():
     testscrollbar.config(orient=scrollbar_orient.get())
 
-tb.Button(frame5, text="  Apply Config  ", command=applyscrollbarconfig).grid(row=4, column=1, pady=20)
+
+tb.Button(controls5, text="Apply Config", command=applyscrollbarconfig, bootstyle="secondary").grid(
+    row=r, column=0, sticky="w", pady=(0, 15)
+); r += 1
+
+codebox5, codebtns5, copy5 = add_code_box(code_area5, height=12)
+
 
 def generatescrollbarcode():
     codeforscrollbar = f'''my_scrollbar = tk.Scrollbar(
@@ -350,65 +504,65 @@ my_scrollbar.config(command=my_text.yview)'''
     codebox5.delete(1.0, tk.END)
     codebox5.insert(1.0, codeforscrollbar)
 
-codebox5 = tk.Text(frame5, width=50, height=15, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox5.grid(row=5, column=1, pady=10)
-tb.Button(frame5, text="    Generate Code   ", command=generatescrollbarcode).grid(row=6, column=1, pady=0)
 
+tb.Button(codebtns5, text="Generate Code", command=generatescrollbarcode, bootstyle="success").pack(side="left")
+tb.Button(codebtns5, text="Copy", command=copy5, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
+
+# =============================================================================
 # Frame 6: Text
-framefortext = tk.Frame(frame6, width=600, height=700)
-testtext = tk.Text(framefortext, width=30, height=10, autostyle=False)
+# =============================================================================
+controls6, preview6, code_area6 = build_tab_shell(frame6, "Text Widget Builder")
+
+testtext = tk.Text(preview6, width=30, height=10, autostyle=False, font=("TkDefaultFont", 12))
 testtext.insert(1.0, "This is a Text widget.\nYou can type multiple lines here.")
-testtext.grid(row=0, column=2, sticky="E", padx=20, pady=20)
-framefortext.grid(row=0, column=2, sticky="E", rowspan=5)
+testtext.pack(expand=True)
 
-tk.Label(frame6, text="Text Widget Configuration", font=("Arial", 16)).grid(row=0, column=1)
+currentfont_text = dict(DEFAULT_FONT_DICT)
 
-currentfont_text = ("TkDefaultFont", 12)
-
-def fontfortext():
-    fd = FontDialog()
-    fd.show()
-    testtext.config(font=fd.result)
-    global currentfont_text
-    currentfont_text = tuple(fd.result)
-
-tb.Button(frame6, text="     Choose Font     ", command=fontfortext).grid(row=2, column=1, pady=20)
-
-def colorfortext():
-    colors = askcolor(title="Change Text colour")
-    if colors[1]:
-        testtext.configure(foreground=colors[1])
-    colors2 = askcolor(title="Change Background colour")
-    if colors2[1]:
-        testtext.config(background=colors2[1])
-
-tb.Button(frame6, text="    Choose Colors   ", command=colorfortext).grid(row=3, column=1, pady=10)
-
-tk.Label(frame6, text="Width:", font=("Arial", 12)).grid(row=4, column=1)
-textWidthEntry = tk.Entry(frame6, width=10)
-textWidthEntry.grid(row=5, column=1)
+r = 0
+tk.Label(controls6, text="Dimensions", font=FONT_SECTION).grid(row=r, column=0, sticky="w"); r += 1
+dim_row6 = tk.Frame(controls6); dim_row6.grid(row=r, column=0, sticky="ew", pady=(4, 15)); r += 1
+tk.Label(dim_row6, text="Width").grid(row=0, column=0, sticky="w")
+textWidthEntry = tk.Entry(dim_row6, width=6)
+textWidthEntry.grid(row=0, column=1, padx=(6, 20))
 textWidthEntry.insert(0, "30")
-
-tk.Label(frame6, text="Height:", font=("Arial", 12)).grid(row=6, column=1)
-textHeightEntry = tk.Entry(frame6, width=10)
-textHeightEntry.grid(row=7, column=1)
+tk.Label(dim_row6, text="Height").grid(row=0, column=2, sticky="w")
+textHeightEntry = tk.Entry(dim_row6, width=6)
+textHeightEntry.grid(row=0, column=3, padx=(6, 20))
 textHeightEntry.insert(0, "10")
+
 
 def applytextsize():
     try:
-        w = int(textWidthEntry.get())
-        h = int(textHeightEntry.get())
-        testtext.config(width=w, height=h)
-    except:
+        testtext.config(width=int(textWidthEntry.get()), height=int(textHeightEntry.get()))
+    except ValueError:
         pass
 
-tb.Button(frame6, text="   Apply Size   ", command=applytextsize).grid(row=8, column=1, pady=10)
+
+tb.Button(dim_row6, text="Apply", command=applytextsize, bootstyle="secondary").grid(row=0, column=4)
+
+btn_row6 = tk.Frame(controls6); btn_row6.grid(row=r, column=0, sticky="ew", pady=(0, 15)); r += 1
+btn_row6.columnconfigure((0, 1), weight=1)
+
+
+def fontfortext():
+    pick_font(testtext, currentfont_text)
+
+
+def colorfortext():
+    pick_colors(testtext)
+
+
+tb.Button(btn_row6, text="Choose Font", command=fontfortext).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+tb.Button(btn_row6, text="Choose Colors", command=colorfortext).grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+codebox6, codebtns6, copy6 = add_code_box(code_area6)
+
 
 def generatetextcode():
-    textfont = currentfont_text
-    textfg = testtext.cget("foreground")
-    textbg = testtext.cget("background")
+    textfont = make_font_tuple(currentfont_text)
+    textfg = testtext.cget("foreground") or "black"
+    textbg = testtext.cget("background") or "SystemButtonFace"
     textwidth = testtext.cget("width")
     textheight = testtext.cget("height")
     codefortext = f'''my_text = tk.Text(
@@ -419,20 +573,26 @@ my_text.pack()'''
     codebox6.delete(1.0, tk.END)
     codebox6.insert(1.0, codefortext)
 
-codebox6 = tk.Text(frame6, width=50, height=12, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox6.grid(row=9, column=1, pady=10)
-tb.Button(frame6, text="    Generate Code   ", command=generatetextcode).grid(row=10, column=1, pady=0)
 
+tb.Button(codebtns6, text="Generate Code", command=generatetextcode, bootstyle="success").pack(side="left")
+tb.Button(codebtns6, text="Copy", command=copy6, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
+
+# =============================================================================
 # Frame 7: Menu
-frameformenu = tk.Frame(frame7, width=600, height=700)
-tk.Label(frameformenu, text="Menu Preview:\nFile | Edit | Help", font=("Arial", 14), 
-         bg="lightgray", relief="raised", padx=20, pady=10).grid(row=0, column=2)
-frameformenu.grid(row=0, column=2, sticky="E", rowspan=5)
+# =============================================================================
+controls7, preview7, code_area7 = build_tab_shell(frame7, "Menu Builder")
 
-tk.Label(frame7, text="Menu Configuration", font=("Arial", 16)).grid(row=0, column=1)
-tk.Label(frame7, text="Menus are created programmatically.\nSee the generated code for structure.", 
-         font=("Arial", 11), wraplength=300, justify="left").grid(row=1, column=1, pady=20)
+tk.Label(preview7, text="File   Edit   Help", font=("Segoe UI", 14), bg="#e9ecef",
+         relief="raised", padx=25, pady=12).pack(expand=True)
+
+tk.Label(controls7, text="About", font=FONT_SECTION).grid(row=0, column=0, sticky="w")
+tk.Label(controls7, text="Menus are created programmatically, not previewed live. "
+                          "Click below to generate a ready-to-use File/Edit menu "
+                          "structure you can adapt.",
+         font=FONT_BODY, wraplength=340, justify="left").grid(row=1, column=0, sticky="w", pady=(6, 20))
+
+codebox7, codebtns7, copy7 = add_code_box(code_area7, height=14)
+
 
 def generatemenucode():
     codeformenu = '''# Create menubar
@@ -456,20 +616,27 @@ edit_menu.add_command(label="Paste", command=paste)'''
     codebox7.delete(1.0, tk.END)
     codebox7.insert(1.0, codeformenu)
 
-codebox7 = tk.Text(frame7, width=60, height=20, autostyle=False, borderwidth=2, 
-                   font=("Cascadia Code", 10))
-codebox7.grid(row=2, column=1, pady=10)
-tb.Button(frame7, text="    Generate Code   ", command=generatemenucode).grid(row=3, column=1, pady=10)
 
+tb.Button(codebtns7, text="Generate Code", command=generatemenucode, bootstyle="success").pack(side="left")
+tb.Button(codebtns7, text="Copy", command=copy7, bootstyle="secondary-outline").pack(side="left", padx=(8, 0))
+
+# =============================================================================
 # Frame 8: How to use
-instruction_text = """
-HOW TO USE GUIBUILDER
+# =============================================================================
+help_container = tk.Frame(frame8, bg=BG_PAGE)
+help_container.pack(fill=tk.BOTH, expand=True)
 
-1. Select a widget tab (Label, Button, Slider, etc.)
+tk.Label(help_container, text="How to Use GUIBuilder", font=FONT_HEADER, bg=BG_PAGE,
+         fg=FG_HEADER).pack(anchor="w", padx=25, pady=(20, 15))
+
+help_card = tb.Labelframe(help_container, text="  Guide  ", bootstyle="primary", padding=25)
+help_card.pack(fill=tk.BOTH, expand=True, padx=25, pady=(0, 25))
+
+instruction_text = """1. Select a widget tab (Label, Button, Slider, etc.)
 
 2. Customize the widget properties:
-   - Change text, font, colors
-   - Adjust size using sliders or input fields
+   - Change text, font, and colors
+   - Adjust size using sliders or the width/height fields
    - Configure widget-specific options
 
 3. Click "Generate Code" to get the Python code
@@ -482,36 +649,40 @@ HOW TO USE GUIBUILDER
    - Place the generated widget code in your application
    - Run root.mainloop() at the end
 
-TIPS:
-- The preview updates in real-time as you make changes
+Tips
+-----
+- The preview updates live as you make changes
 - Font dialogs and color pickers provide visual selection
 - Each widget shows the most commonly used properties
 - Generated code uses standard tkinter syntax
 
-EXAMPLE WORKFLOW:
+Example workflow
+-----------------
 1. Customize a Label with your desired text and style
 2. Generate and copy the code
 3. Create more widgets in other tabs
 4. Combine all generated code in your application
 """
 
-instruction_textbox = tk.Text(frame8, width=80, height=35, font=("Arial", 11), 
-                              wrap="word", padx=20, pady=20)
+instruction_textbox = tk.Text(help_card, font=FONT_BODY, wrap="word", borderwidth=0,
+                               highlightthickness=0, bg=BG_CARD)
 instruction_textbox.insert(1.0, instruction_text)
 instruction_textbox.config(state="disabled")
-instruction_textbox.pack(expand=True, fill="both", padx=20, pady=20)
+instruction_textbox.pack(fill="both", expand=True)
 
-# add frames to nbk
-nbk.add(frame1, text='  Label   ')
-nbk.add(frame2, text='  Button  ')
-nbk.add(frame3, text='  Slider  ')
-nbk.add(frame4, text='  Entry   ')
-nbk.add(frame5, text='  Scrollbar   ')
-nbk.add(frame6, text='  Text    ')
-nbk.add(frame7, text='  Menu    ')
-nbk.add(frame8, text='How to use Widget Code')
+# ----------------------------------------------------------------------------
+# add frames to notebook
+# ----------------------------------------------------------------------------
+nbk.add(frame1, text="  Label  ")
+nbk.add(frame2, text="  Button  ")
+nbk.add(frame3, text="  Slider  ")
+nbk.add(frame4, text="  Entry  ")
+nbk.add(frame5, text="  Scrollbar  ")
+nbk.add(frame6, text="  Text  ")
+nbk.add(frame7, text="  Menu  ")
+nbk.add(frame8, text="  How to Use  ")
 
 nbk.select(0)
-nbk.pack(fill=tk.BOTH, expand=True)
+nbk.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
 root.mainloop()

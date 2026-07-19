@@ -1,2 +1,12 @@
-/Blueconda Editor Test 1.exe
-/Blueconda Editor Test 2.exe
+
+/starterspash.exe
+/MDEditor.exe
+/GUIBuilder.exe
+
+
+*.exe
+build/
+dist/
+__pycache__/
+*.spec
+.git/
