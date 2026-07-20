@@ -2849,7 +2849,11 @@ def mark_as_saved():
 
   # Hide the warning label
   if unsaved_label:
-    unsaved_label.place_forget()
+    unsaved_label.grid_forget()
+
+# Had to make this earlier to prevent errors
+menuframe = tk.Frame(window, bg=config_data["background"])
+menuframe.grid(row=0, column=0, columnspan=5, sticky="EW")
 
 def save_file():
     with open("temp/currentfile.txt","r", encoding="utf-8") as cf:
@@ -2873,14 +2877,14 @@ def save_file():
     
 def create_unsaved_indicator(parent_window, save_button):
   """Call this once during setup to create the hidden warning label."""
-  global unsaved_label
+  global unsaved_label, menuframe
 
   with open("settings/font.txt", "r") as file:
     font_name = file.read().strip()
 
   # Create the label (styled to look like a notification/button)
   unsaved_label = ttk.Label(
-      parent_window,
+      menuframe,
       text="⚠ Unsaved Changes. Click to Save.",
       background= config_data["f_string"],
       foreground= config_data["keyword"],
@@ -2892,7 +2896,7 @@ def create_unsaved_indicator(parent_window, save_button):
   # Clicking the warning label can also trigger the save function
   unsaved_label.bind("<Button-1>", lambda e: save_file())
   # Hide it initially by default
-  unsaved_label.place_forget()
+  unsaved_label.grid_forget()
 
 def new_file():
     if usertext.edit_modified():
@@ -3405,10 +3409,10 @@ def on_text_modified(event=None):
 
       # Place the label right under the save button
       # Place the label right under the save button
-      unsaved_label.place(x=bx, y=by + bh + 10)
+      unsaved_label.grid(row=0, column=3, sticky="W")  # Adjust padding as needed
     else:
       # If modified is False (e.g. after a save), forcefully hide the label
-      unsaved_label.place_forget()
+      unsaved_label.grid_forget()
 usertext.bind("<<Modified>>", on_text_modified)
 
 # -----------------
@@ -4498,8 +4502,6 @@ def remove_inactive_outline(root): # I don't know why the AI made this a functio
   style.configure("Outline.TMenubutton", borderwidth=0, relief="flat")  # Remove outline
 
 
-menuframe = tk.Frame(window, bg=config_data["background"])
-menuframe.grid(row=0, column=0, columnspan=5, sticky="EW")
 
 menubutton = tb.Menubutton(menuframe,  text="File", menu=file_menu, bootstyle="outline")
 menubutton2 = tb.Menubutton(menuframe, text="Edit", menu=edit_menu, bootstyle="outline")
