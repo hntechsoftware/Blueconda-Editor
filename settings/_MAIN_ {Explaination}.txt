@@ -1,4 +1,0 @@
-This entire section is used for user settings. Since Python erases data stored when the app is closed, Blueconda uses a state-of-the-art text file data writing system to remember user preferences. We're so smart, aren't we? Or just too lazy...
-Anyway IDK why you're reading this but clearly you're interested, so I suggest you use Blueconda.
-
-Fun fact: Blueconda's building started 07 November 2023, 11:06:41.

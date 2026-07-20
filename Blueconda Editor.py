@@ -4,17 +4,15 @@
 
 
 
-# Import all needed modules
+# Import all needed modules (this is a HEFTY list)
 import tkinter as tk
 from googlesearch import search
 import platform
-import pygments.lexers.python
 from BCLineNumbers import TkLineNumbers
 from tkinter import ttk
 from ttkbootstrap.dialogs.colorchooser import ColorChooserDialog
 import keyword
 import re
-from tkinter.scrolledtext import ScrolledText
 from pathlib import Path
 import sys
 import ast
@@ -29,7 +27,6 @@ import time
 from tkinter import simpledialog
 import os
 from tktooltip import ToolTip
-from tkinter import PhotoImage
 from  tkinter import messagebox
 import webbrowser
 import ttkbootstrap as tb
@@ -59,6 +56,8 @@ import tkinter.font as tkfont
 import types
 import builtins
 import shutil
+import tkchart
+from importlib import metadata
 
 # Define theme for app
 themeblueconda = { # This was redacted later
@@ -402,7 +401,6 @@ def aboutapp():
     maximize_minimize_button.hide(aboutwin)                                    
 
 
-# TODO change templates to actual templates
 def loadtemplate(usertext):
   """
   Loads a template from a listbox selection in a separate window.
@@ -632,7 +630,7 @@ def update_row_column():
 #--RowColumn------------------------------------------------------------------
 
 #---
-def ShouldIAutocomplete(): # why does this not work?? # TODO fix this
+def ShouldIAutocomplete(): #TODO fix this
     """This is The Code to see if Blueconda should disable Autocomplete (for strings and comments)."""
     text_widget = usertext
     line_number =  usertext.index(tk.INSERT).split(".")[0]
@@ -685,9 +683,6 @@ window.columnconfigure(0, weight=1)
 window.rowconfigure(1, weight=5, uniform=1)
 window.columnconfigure(1, weight=1)
 #Codebox
-
-# IDEAS GO HERE
-# TODO navigate feature for F&R
 
 
 
@@ -862,8 +857,6 @@ syntax_colors = {
 
 }
 
-
-import re
 
 def tag_f_strings(event):
     usertext.tag_remove("curly_brace", 1.0, tk.END)
@@ -1438,7 +1431,6 @@ class TextPeer(tk.Text):
 
     self.config(wrap=tk.NONE) # Change the textwrap to None, so that line does not take up more than one
     
-    # TODO Add slider setting to adjust the minimap size
 
     self.tag_configure("sel", background="#75dee3", foreground="white")   # Change the selection color
 
@@ -1775,7 +1767,6 @@ WordToUse = ''
 ApiComplete = False
 word_before_dot = ''
 
-#TODO Add some basic module definitions as well for autocomplete info (see thonny autocomplete)
 def on_key(event, DotTyped, SpaceTyped):
     """Performs autocomplete based on the current word under the caret and handles selection."""
     # Make variables global so that they can work across functions
@@ -2208,7 +2199,76 @@ app = Application(frame4)
 #vars_listbox.configure(font=fontnew)
 
 
-# TODO build a simple plotter like the thonny one
+def ResourceUsageWindow():
+    # Boilerplate Toplevel code
+    rwin = tk.Toplevel()                            
+    rwin.attributes('-topmost', True)               
+    rwin.attributes("-alpha", 0.9)                  
+    #rwin.geometry("600x600")                 
+    rwin.configure(bg=config_data["background"])    
+    rwin.title("Resource Usage")   
+    # Create stop event flag for thread
+    stopflag = threading.Event()
+
+    # Create TKChart object
+    # IMPORTANT INFO: TKChart contains a VALIDATE module that is buggy
+    # On my own system I have modified its source file to delete all validation functions
+    # this will need to be resolved if you're building from source.
+    line_chart = tkchart.LineChart(
+        master=rwin,
+        x_axis_data="t/s",
+        y_axis_data="% USAGE",
+        x_axis_values=("01", "02", "03", "04", "05", "06", "07", "08", "09", "10"),
+        y_axis_values=(0, 100),
+        y_axis_label_count=10,
+        y_axis_section_count=10,
+        x_axis_section_count=10,
+    )
+    line_chart.grid(row=0,column=0, columnspan=2, sticky="NSEW")
+    line1 = tkchart.Line( # CPU USAGE LINE
+        master=line_chart,
+        color="#5dffb6",
+        size=2,
+        style="dashed",
+        style_type=(10, 5),
+    )
+    line2 = tkchart.Line( # RAM USAGE LINE
+        master=line_chart,
+        color="#FFBAD2",
+        size=2,
+        point_highlight="enabled",
+        point_highlight_color="#FFBAD2",
+    )
+    # DATA handler function
+    def display_data():
+        while not stopflag.is_set(): # Repeat indefinitely until flag exists
+            # Use psutil to get CPU and RAM usage
+            cpu_usage = psutil.cpu_percent(interval=0.5)
+            ram = psutil.virtual_memory()
+            ram_usage = ram.percent
+            # Display on graph
+            line_chart.show_data(line=line1, data=[cpu_usage])
+            line_chart.show_data(line=line2, data=[ram_usage])
+            if stopflag.wait(timeout=0.5):
+                break # Terminate loop
+    def on_close(): # Function to terminate thread on window close, override usual
+        stopflag.set()  # Signal the thread to stop
+        rwin.destroy()  # Close the window
+    rwin.protocol("WM_DELETE_WINDOW", on_close)  # Override close button behavior
+
+    threading.Thread(target=display_data, daemon=True).start()
+
+    # Labels for graph lines
+    ttk.Label(rwin, foreground="#5DFFB6", text="CPU USAGE").grid(row=1, column=0)
+    ttk.Label(rwin, foreground="#FFBAD2", text="RAM USAGE").grid(row=1, column=1)
+    # Lock window size, AFTER widgets have been placed within
+    rwin.resizable(False, False)
+    # Theming boilerplate
+    pywinstyles.change_header_color(rwin, color=config_data['background'])  
+    maximize_minimize_button.hide(rwin)  
+
+
+
 # TODO add a feature to change icons to bland ones
 
 # TODO Consider redacting
@@ -2219,8 +2279,8 @@ def get_help_info(selected_text):
     selected_text: The selected text from the text widget.
   """
 
-  def run_subprocess(): # TODO Make it not overlap two help notes eg: for del and delattr
-    try:
+  def run_subprocess(): # TO-DO Make it not overlap two help notes eg: for del and delattr
+    try:                # Due to this being an obscure feature I'll consider doing this, one day
         kwargs = {
             "capture_output": True,
             "text": True,
@@ -2393,7 +2453,7 @@ def transluscent():
 def opaque():
     window.attributes("-alpha", 1)
 
-def settings(): # TODO fix this ugly UI
+def settings(): # TO-DO fix this ugly UI ... NOPE. LATER. Bigger fish to fry.
     genfont = ("Lucida Sans Typewriter",16,"bold")
     setmenu = tk.Toplevel()
     setmenu.attributes('-topmost', True)
@@ -2872,6 +2932,111 @@ update_memory_usage()
 
 memory_bar.bind("<Enter>", enter_function)
 memory_bar.bind("<Leave>", leave_function)
+memory_bar.bind("<Button-1>", lambda e: ResourceUsageWindow())
+
+
+# ---------- SETTINGS FILE HANDLING ----------
+
+SETTINGS_FILE = "settings/ai_settings.txt"
+
+def load_ai_settings():
+    global model
+    if not os.path.exists(SETTINGS_FILE):
+        return None
+    try:
+        with open(SETTINGS_FILE, "r") as file:
+            lines = file.read().splitlines()
+        api_key = lines[0]
+        model_name = lines[1]
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        return True
+    except Exception:
+        # File exists but is broken/empty/invalid -> treat as "not configured"
+        return None
+
+
+def save_ai_settings(api_key):
+    global model
+    selected_model = model_var.get()
+    with open(SETTINGS_FILE, "w") as file:
+        file.write(api_key + "\n")
+        file.write(selected_model + "\n")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(selected_model)
+    messagebox.showinfo("Saved", "AI Settings have been saved.")
+    settings_win.destroy()
+
+
+# ---------- AI SETTINGS MENU (RIGHT CLICK) ----------
+
+def use_api_key():
+    global model_var, model_dropdown
+
+    api_key = api_key_entry.get()
+    if api_key == "":
+        messagebox.showerror("Error", "Please enter an API Key.")
+        return
+
+    try:
+        genai.configure(api_key=api_key)
+        all_models = genai.list_models()
+    except Exception as exception:
+        messagebox.showerror("Error", f"Could not use this API Key.\n{exception}")
+        return
+
+    text_model_names = []
+    for m in all_models:
+        # Only keep models that can actually output TEXT (generateContent)
+        if "generateContent" in m.supported_generation_methods:
+            text_model_names.append(m.name)
+
+    if len(text_model_names) == 0:
+        messagebox.showerror("Error", "No text generation models found for this API Key.")
+        return
+
+    model_var.set(text_model_names[0])
+    model_dropdown["menu"].delete(0, "end")
+    for name in text_model_names:
+        model_dropdown["menu"].add_command(label=name, command=lambda value=name: model_var.set(value))
+
+    model_dropdown.grid(row=5, column=0, columnspan=2, pady=5)
+    save_button.grid(row=6, column=0, columnspan=2, pady=10)
+
+
+def open_ai_settings(event=None):
+    global api_key_entry, model_var, model_dropdown, settings_win, save_button
+
+    win = tb.Toplevel()
+    win.attributes('-topmost', True)
+    win.attributes("-alpha", 0.9)
+    win.configure(bg=config_data["background"])
+    win.title("AI Settings")
+    settings_win = win
+
+    tb.Label(win, text="Enter API Key:").grid(row=0, column=0, columnspan=2, pady=5, padx=5)
+    api_key_entry = tb.Entry(win, width=40)
+    api_key_entry.grid(row=1, column=0, columnspan=2, padx=5)
+
+    use_button = tb.Button(win, text="USE", command=use_api_key)
+    use_button.grid(row=2, column=0, columnspan=2, pady=10, sticky="EW")
+
+    tb.Button(win, command=lambda:webbrowser.open_new_tab("https://aistudio.google.com/api-keys"), text="Get API Key...").grid(row=3, column=0, columnspan=1, pady=10, sticky="EW")
+    tb.Button(win, command=lambda:webbrowser.open_new_tab("https://aistudio.google.com/rate-limit"), text="Rate Limits").grid(row=3, column=1, columnspan=1, pady=10, sticky="EW")
+
+   
+    tb.Label(win, text="Choose a Model:").grid(row=4, column=0, columnspan=2)
+
+    model_var = tk.StringVar(win)
+    model_dropdown = tb.OptionMenu(win, model_var, "")
+    # not gridded yet, appears only after USE succeeds
+
+    save_button = tb.Button(win, text="Save Settings", command=lambda: save_ai_settings(api_key_entry.get()))
+    # not gridded yet either, appears only after USE succeeds
+
+    pywinstyles.change_header_color(win, color=config_data['background'])
+    maximize_minimize_button.hide(win)
+
 
 def checkwifistatus(): # Function to check if WiFi is working
     try:
@@ -2882,14 +3047,7 @@ def checkwifistatus(): # Function to check if WiFi is working
         return  False # Requests failed so internet is not working
 
 # Data for AI Model
-# TODO use custom API Key Utilise the App Config Utility
-# Will prob make a tutorial for beginners about this
-genai.configure(api_key="AIzaSyBlWEH4hu6zTipDnlrgI_FP4USULu2aefs")
-# Please dear coders don't use my API Key, generate your own FREE one on Google AI Studio
-# This is the free model after all, stealing it will do nothing but prove you're just evil
-model = genai.GenerativeModel("models/gemini-2.0-flash") # I only need text generation here
-# Following code used to remove markdown formatting (credit to Pavel Vorobyov, stackoverflow)
-
+# The following code used to remove markdown formatting (credit to Pavel Vorobyov, stackoverflow)
 
 def unmark_element(element, stream=None):
     if stream is None:
@@ -2911,7 +3069,6 @@ __md.stripTopLevelTags = False
 def unmark(text):
     return __md.convert(text)
 
-# TODO Add code context (AI uses given code too)
 def getaianswer():
     tag_name = "blue_text"
     anstext.tag_configure(tag_name, foreground=config_data['operator'])
@@ -2928,10 +3085,17 @@ def getaianswer():
         time.sleep(0.01)
 
 
-def aiask(): # Added because of programmers obsession with AI!
+def aiask(): 
     global anstext
     global qentry
     global chat
+    global model
+
+    configured = load_ai_settings()
+    if configured is None:
+        open_ai_settings()
+        return
+
     WiFiStatus = checkwifistatus()
     if WiFiStatus == False: # Check WiFi by trying to send requests (prevent funny errors if WiFi not working)
         messagebox.showerror("Error", "Could Not Connect to Server.\n Please check your internet connection.")
@@ -2940,7 +3104,7 @@ def aiask(): # Added because of programmers obsession with AI!
     aiwindow.attributes('-topmost', True)
     aiwindow.attributes("-alpha", 0.9)
     # aiwindow.geometry("800x600")
-    aiwindow.title("Ask AI (Google Gemini 1.5 Pro API)")
+    aiwindow.title("Ask AI")
     chat = model.start_chat() # Start the chat Session
     tb.Label(aiwindow, text="Enter your question here:").grid(row=2, column=0, columnspan=2)
     qentry = tb.Entry(aiwindow, width=50)
@@ -2963,7 +3127,7 @@ def aiask(): # Added because of programmers obsession with AI!
     maximize_minimize_button.hide(aiwindow)
 
 
-def tip(): # TODO Does not appear in EXE??
+def tip():
     python_tips = [
     "Use f-strings for clean string formatting:\n| name = 'Alice'\n greeting = f'Hello, {name}!'",
     "Don't be ashamed to use Stack Overflow or AI. All programmers do it.",
@@ -3305,6 +3469,7 @@ aifilelabel= tk.Label(image=aifile)
 aifilebutton= tk.Button(C, image=aifile,cursor="dot", command=aiask,
 borderwidth=0,highlightthickness = 0,bd = 0,bg = config_data['background'],activebackground = config_data['background'], autostyle=False)
 aifilebutton.grid(row=0,column=14,padx=3)
+aifilebutton.bind("<Button-3>", open_ai_settings) # This button has a right click too
 
 #ToolTips
 ToolTip(openfilebutton, msg="Open a Python file", follow=True, delay=0.1)
@@ -3321,7 +3486,7 @@ ToolTip(mdfilebutton, msg="Open the Markdown file editor", follow=True, delay=0.
 ToolTip(treefilebutton, msg="Open the Program Tree\nDisplays All Functions/Classes", follow=True, delay=0.1)
 ToolTip(guifilebutton, msg="Launch the Tkinter GUI Builder\n(Helps design elements for Tkinter GUI apps)", follow=True, delay=0.1)
 ToolTip(tipfilebutton, msg="Displays a random Python tip", follow=True, delay=0.1)
-ToolTip(aifilebutton, msg="Ask AI for Help (Beta)", follow=True, delay=0.1)
+ToolTip(aifilebutton, msg="Ask AI for Help\nRight-Click: AI Settings", follow=True, delay=0.1)
 
 #----------------
 #End for Buttons
@@ -3432,6 +3597,42 @@ clbutton = tk.Button(frame5,bg="white",text="Make Code Neater...",command=tidyco
 clbutton.pack(fill=tk.BOTH, pady=5)
 clbutton.configure(font=fontnew)
 
+def find_system_python():
+    # If your editor already stores/lets the user pick an interpreter, use that path instead.
+    return shutil.which("python") or shutil.which("python3")
+
+def get_site_packages_path(python_exe):
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+    result = subprocess.run(
+        [python_exe, "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
+        capture_output=True, text=True, timeout=5, **kwargs
+    )
+    path = result.stdout.strip()
+    return path or None
+
+def get_installed_packages(python_exe=None):
+    exe = python_exe or find_system_python()
+    if exe is None:
+        return []
+
+    try:
+        site_packages = get_site_packages_path(exe)
+        if not site_packages:
+            return []
+
+        dists = metadata.distributions(path=[site_packages])
+        packages = sorted(
+            ({"name": d.metadata["Name"], "version": d.version} for d in dists if d.metadata["Name"]),
+            key=lambda p: p["name"].lower()
+        )
+        return packages
+    except Exception as e:
+        print(f"Failed to list packages: {e}")
+        return []
+
 #--------------------------------------------------------------
 class ConsoleFrame(tk.Frame):
     def __init__(self, master):
@@ -3452,19 +3653,14 @@ class ConsoleFrame(tk.Frame):
         command = self.entry.get()
         self.entry.delete(0, tk.END)
 
-        def run_command(): # TODO Fix EXE error where all lib dont show (This error also is in lookup function)
+        def run_command(): 
             if command == 'list_lib':
-                # List all the installed Python libraries
-                packages = pkg_resources.working_set
+                packages = get_installed_packages()
                 for package in packages:
-                    name_color = "black" # Define the colors for varbox here
-                    version_color = config_data['operator']
-
-                    self.text.tag_configure("package_name", foreground=name_color) # Modify tags to show color
-                    self.text.tag_configure("version_number", foreground=version_color)
-
-                    self.text.insert('end', f"{package.key} ")
-                    self.text.insert('end', f"     | Version: {package.version}\n","version_number" )
+                    self.text.tag_configure("package_name", foreground="black")
+                    self.text.tag_configure("version_number", foreground=config_data['operator'])
+                    self.text.insert('end', f"{package['name']} ")
+                    self.text.insert('end', f"     | Version: {package['version']}\n", "version_number")
             else: # SOME COMMANDS OTHER THAN PIP INSTALL CAN CAUSE CORRUPTION AT THIS STAGE! PLEASE BE CAREFUL!!
                 output = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
                 self.text.insert('end', output.stdout.decode('utf-8'))
@@ -3697,7 +3893,7 @@ def useconfig():
         bbc.close()
     apwin.destroy()
 
-def appconfigutility(): # TODO Does not appear in EXE??
+def appconfigutility(): 
 
     with open("settings/userconfig.py", "r") as tts:
         pretext = tts.read()
