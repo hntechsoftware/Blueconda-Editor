@@ -82,6 +82,9 @@ themeblueconda = { # This was redacted later
         }
 }
 
+# Important vars
+file_loaded = False
+unsaved_label = None
 
 # Get current theme needed
 def extract_toml_table(file_path, table_name):
@@ -317,7 +320,7 @@ def compilerrun():
 # Function invoked when window closed, to show warning message
 def closecode():
     answer = messagebox.askyesno(title='Confirmation',
-                      message='Are you sure that you want to quit? Any unsaved changes will be lost.')
+                      message='Are you sure that you want to quit? Any unsaved changes will be lost.\n\nYES to quit, NO to cancel.')
     if answer:
         with open("temp/currentfile.txt","r", encoding="utf-8") as Atlantis:
             components = Atlantis.read()
@@ -1651,7 +1654,6 @@ def on_enter(event):
 usertext.bind('<Return>', on_enter)
 
 
-
 #Listbox for Variables
 
 def is_safe_name(name):
@@ -2271,7 +2273,6 @@ def ResourceUsageWindow():
 
 # TODO add a feature to change icons to bland ones
 
-# TODO Consider redacting
 def get_help_info(selected_text):
   """Gets help information for the selected text in a separate thread.
 
@@ -2619,7 +2620,6 @@ def runinterminal():
     errormsg = output_text.get("2.0", "5.0") # To use for searching for answer
     tk.Button(nwin, text="Search for Answer Online", command=lambda: ShowSolutions(errormsg)).pack(fill=tk.BOTH, expand=True, pady=8)
     tk.Button(nwin, text="Ask AI For Answer").pack(fill=tk.BOTH, expand=True)
-    # TODO finish this
     pywinstyles.change_header_color(nwin, color=config_data['background'])
     maximize_minimize_button.hide(nwin)
 
@@ -2810,7 +2810,7 @@ def openfileregular():
 
 
 def open_file(): 
-    global file_path
+    global file_path, file_loaded
 
     file_path = filedialog.askopenfilename(    # Below this line is the list
         title="Open File (py, py3, pyw, pyi)", # of supported filetypes for Blueconda
@@ -2826,6 +2826,8 @@ def open_file():
         tag_all()
         with open("temp/currentfile.txt","w", encoding="utf-8") as rw:
             rw.write(file_path)
+    file_loaded = True
+    usertext.edit_modified(False)
 
 
 
@@ -2843,7 +2845,18 @@ def save_file_as():
         with open("temp/currentfile.txt","w", encoding="utf-8") as rw:
             rw.write(file_path + ".py")
 
-# TODO Add Button: Unsaved Changes Click to Save
+def mark_as_saved():
+  """Call this inside your existing SAVE function."""
+  global unsaved_label, usertext
+
+  # Reset the tkinter text widget's internal modification flag
+  if "usertext" in globals():
+    usertext.edit_modified(False)
+
+  # Hide the warning label
+  if unsaved_label:
+    unsaved_label.place_forget()
+
 def save_file():
     with open("temp/currentfile.txt","r", encoding="utf-8") as cf:
         newfilepath = cf.read()
@@ -2860,9 +2873,32 @@ def save_file():
         alert=True,
         )
         toast.show_toast()
+        mark_as_saved()
     except Exception:
         save_file_as()
     
+def create_unsaved_indicator(parent_window, save_button):
+  """Call this once during setup to create the hidden warning label."""
+  global unsaved_label
+
+  with open("settings/font.txt", "r") as file:
+    font_name = file.read().strip()
+
+  # Create the label (styled to look like a notification/button)
+  unsaved_label = ttk.Label(
+      parent_window,
+      text="⚠ Unsaved Changes. Click to Save.",
+      background= config_data["f_string"],
+      foreground= config_data["keyword"],
+      borderwidth=2,
+      relief="solid",
+      font=(font_name, 9, "bold"),
+      cursor="hand2",
+  )
+  # Clicking the warning label can also trigger the save function
+  unsaved_label.bind("<Button-1>", lambda e: save_file())
+  # Hide it initially by default
+  unsaved_label.place_forget()
 
 def new_file():
     if usertext.edit_modified():
@@ -3359,6 +3395,28 @@ def pythonrun_throughsourceruntime():
     t.start()
 
 
+def on_text_modified(event=None):
+  """Bound to the text widget to detect edits."""
+  global file_loaded, unsaved_label, usertext, savefilebutton
+
+  # Only trigger if a file has actually been opened and the widget exists
+  if file_loaded and unsaved_label and savefilebutton:
+    # Check if the text widget is currently modified
+    if usertext.edit_modified():
+      # Position it right underneath the save button dynamically
+      # Get the save button's geometry relative to its parent
+      bx = savefilebutton.winfo_x()
+      by = savefilebutton.winfo_y()
+      bh = savefilebutton.winfo_height()
+
+      # Place the label right under the save button
+      # Place the label right under the save button
+      unsaved_label.place(x=bx, y=by + bh + 10)
+    else:
+      # If modified is False (e.g. after a save), forcefully hide the label
+      unsaved_label.place_forget()
+usertext.bind("<<Modified>>", on_text_modified)
+
 # -----------------
 # Code For Buttons
 # -----------------
@@ -3808,6 +3866,7 @@ def licenseapp():
     maximize_minimize_button.hide(licensewindow)
 
 def recentfile(): # Open most recent file opened
+    global file_loaded
     try:
         with open("temp/mostrecentfile.txt",mode="r",encoding="utf-8") as greenland:
             currentfile = greenland.read() # No offense to anyone from Greenland! :)
@@ -3825,7 +3884,9 @@ def recentfile(): # Open most recent file opened
                 with open("temp/currentfile.txt","w") as rw:
                     rw.write(currentfile)
                 update_title(file_path= currentfile)
-
+                file_loaded = True
+                usertext.edit_modified(False)
+                del(currentfile)
 
 
     except Exception as e:
@@ -3885,6 +3946,8 @@ def comingsoon(): # no guarantees!
     pywinstyles.change_header_color(cswin, color=config_data['background'])
     maximize_minimize_button.hide(cswin)
 
+# Initialize Unsaved Changes Indicator
+create_unsaved_indicator(window, savefilebutton)
 
 def useconfig():
     configpy = codeview.get(1.0, tk.END)
