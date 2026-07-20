@@ -21,7 +21,7 @@ import subprocess
 from io import StringIO
 from tempfile import NamedTemporaryFile
 import threading
-import pkg_resources
+from ttkbootstrap.constants import *
 from tkinter import filedialog
 import time
 from tkinter import simpledialog
@@ -1383,16 +1383,16 @@ class Application(tb.Frame):
 
 
 # Create the helpful sidebar
-notebook = tb.Notebook(window,height=600,width=320,bootstyle="primary")
+notebook = tb.Notebook(window, width=320, bootstyle="primary")
 
 
 # create frames
-frame1 = tk.Frame(notebook, width=300, height=600,bg="white")
-frame2 = tk.Frame(notebook, width=300, height=600,bg="white")
-frame3 = tk.Frame(notebook, width=300, height=600,bg="white")
-frame4 = tb.LabelFrame(notebook, text="(File Path Appears Here)", width=300, height=600) # This is label frame to 
-frame5 = tk.Frame(notebook, width=300, height=600,bg="white")      # display file path as well
-frame6 = tk.Frame(notebook, width=300, height=600,bg="white")
+frame1 = tk.Frame(notebook, bg="white")
+frame2 = tk.Frame(notebook, bg="white")
+frame3 = tk.Frame(notebook, bg="white")
+frame4 = tb.LabelFrame(notebook, text="(File Path Appears Here)") # This is label frame to 
+frame5 = tk.Frame(notebook, bg="white")      # display file path as well
+frame6 = tk.Frame(notebook, bg="white")
 
 
 
@@ -1404,6 +1404,7 @@ notebook.add(frame4, text='Files')
 notebook.add(frame5, text='Analysis')
 notebook.add(frame6, text='Library Manager')
 notebook.select(3)
+
 
 notebook.grid(row=2, column=3, columnspan=2, sticky="NSEW")
 
@@ -2621,7 +2622,7 @@ def runinterminal():
     tk.Button(nwin, text="Search for Answer Online", command=lambda: ShowSolutions(errormsg)).pack(fill=tk.BOTH, expand=True, pady=8)
     tk.Button(nwin, text="Ask AI For Answer").pack(fill=tk.BOTH, expand=True)
     pywinstyles.change_header_color(nwin, color=config_data['background'])
-    maximize_minimize_button.hide(nwin)
+    maximize_minimize_button.hide(nwin) # TODO Finish this man
 
 def quickrunmain():
     qrunfile = open("temp/qruncodec.py","w",encoding='utf-8')
@@ -3655,135 +3656,604 @@ clbutton = tk.Button(frame5,bg="white",text="Make Code Neater...",command=tidyco
 clbutton.pack(fill=tk.BOTH, pady=5)
 clbutton.configure(font=fontnew)
 
+frame1.rowconfigure(0, weight=1)
+frame1.columnconfigure(0, weight=1)
+
+frame2.rowconfigure(0, weight=1)
+frame2.columnconfigure(0, weight=1)
+
+frame3.rowconfigure(0, weight=1)
+frame3.columnconfigure(0, weight=1)
+
+frame4.rowconfigure(0, weight=1)
+frame4.columnconfigure(0, weight=1)
+
+frame5.rowconfigure(0, weight=1)
+frame5.columnconfigure(0, weight=1)
+
+
+
+
+# ---------------
+# Library Manager
+# ---------------
+
+frame6.rowconfigure(0, weight=1)
+frame6.columnconfigure(0, weight=1)
+
+notebook.rowconfigure(0, weight=1)
+notebook.columnconfigure(0, weight=1)
+
+libmanager = tb.Notebook(frame6, bootstyle="primary")
+libsframe = tb.Frame(libmanager)
+installframe = tb.Frame(libmanager)
+libmanager.add(libsframe, text="Installed Libraries")
+libmanager.add(installframe, text="Install Library")
+libmanager.grid(row=0, column=0, sticky="nsew")
+
+_libs_python_exe = None
+_libs_dist_map = {}
+_libs_row_widgets = []
+_libs_canvas = None
+_libs_scrollable_frame = None
+_libs_list_button = None
+_libs_status_label = None
+_libs_search_var = None
+_libs_search_entry = None
+_libs_all_packages = []
+_libs_search_placeholder = "🔎Search..."
+ 
 def find_system_python():
     # If your editor already stores/lets the user pick an interpreter, use that path instead.
     return shutil.which("python") or shutil.which("python3")
-
+ 
+ 
 def get_site_packages_path(python_exe):
     kwargs = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-
+ 
     result = subprocess.run(
         [python_exe, "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
         capture_output=True, text=True, timeout=5, **kwargs
     )
     path = result.stdout.strip()
     return path or None
-
+ 
+ 
 def get_installed_packages(python_exe=None):
+    """
+    Returns (packages, dist_map)
+      packages: sorted list of {"name": ..., "version": ...}
+      dist_map: {name: importlib.metadata.Distribution} for INFO lookups
+    """
     exe = python_exe or find_system_python()
     if exe is None:
-        return []
-
+        return [], {}
+ 
     try:
         site_packages = get_site_packages_path(exe)
         if not site_packages:
-            return []
-
-        dists = metadata.distributions(path=[site_packages])
+            return [], {}
+ 
+        dists = list(metadata.distributions(path=[site_packages]))
+        dist_map = {d.metadata["Name"]: d for d in dists if d.metadata["Name"]}
+ 
         packages = sorted(
-            ({"name": d.metadata["Name"], "version": d.version} for d in dists if d.metadata["Name"]),
+            ({"name": name, "version": d.version} for name, d in dist_map.items()),
             key=lambda p: p["name"].lower()
         )
-        return packages
+        return packages, dist_map
     except Exception as e:
         print(f"Failed to list packages: {e}")
-        return []
+        return [], {}
+ 
+ 
+def uninstall_package(python_exe, package_name):
+    """Uninstall a package from the target interpreter's environment via pip."""
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+ 
+    result = subprocess.run(
+        [python_exe, "-m", "pip", "uninstall", "-y", package_name],
+        capture_output=True, text=True, timeout=60, **kwargs
+    )
+    return result.returncode == 0, (result.stdout + result.stderr)
+ 
+ 
+# ---- UI setup -------------------------------------------------------------
+ 
+def build_libsframe_ui():
+    """Call once to build the top bar + scrollable list inside libsframe."""
+    global _libs_canvas, _libs_scrollable_frame, _libs_list_button, _libs_status_label, _libs_python_exe
+ 
+    _libs_python_exe = find_system_python()
+ 
+    top = ttk.Frame(libsframe)
+    top.pack(side="top", fill="x", padx=8, pady=8)
+ 
+    _libs_list_button = ttk.Button(top, text="List Libraries", command=refresh_libs)
+    _libs_list_button.pack(side="left")
+ 
+    _libs_status_label = ttk.Label(top, text="")
+    _libs_status_label.pack(side="left", padx=10)
 
-#--------------------------------------------------------------
-class ConsoleFrame(tk.Frame):
-    def __init__(self, master):
-        super().__init__(master)
+    global _libs_search_var, _libs_search_entry
 
-        self.text = tk.Text(self, height=15, width=60,borderwidth=2, autostyle=False, wrap="word")
-        self.text.pack()
-        self.text.configure(font=fontnew)
-        self.text.configure(fg=config_data['textforeground'])
-        self.text.configure(bg=config_data['background'])
-        self.entry = tk.Entry(self,borderwidth=2)
-        self.entry.bind('<Return>', self.execute_command)
-        self.entry.pack(fill=tk.BOTH)
-
-        self.thread = None
-
-    def execute_command(self, event):
-        command = self.entry.get()
-        self.entry.delete(0, tk.END)
-
-        def run_command(): 
-            if command == 'list_lib':
-                packages = get_installed_packages()
-                for package in packages:
-                    self.text.tag_configure("package_name", foreground="black")
-                    self.text.tag_configure("version_number", foreground=config_data['operator'])
-                    self.text.insert('end', f"{package['name']} ")
-                    self.text.insert('end', f"     | Version: {package['version']}\n", "version_number")
-            else: # SOME COMMANDS OTHER THAN PIP INSTALL CAN CAUSE CORRUPTION AT THIS STAGE! PLEASE BE CAREFUL!!
-                output = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-                self.text.insert('end', output.stdout.decode('utf-8'))
-            
-
-        self.thread = threading.Thread(target=run_command)
-        self.thread.start()
-console = ConsoleFrame(frame6)
-console.pack()
-libman1 = tk.Label(frame6,text="Blueconda Library Manager",bg="white")
-libman1.pack()
-libman2 = tk.Label(frame6,text="Assuming the name of the library is foo:",bg="white")
-libman2.pack()
-libman3 = tk.Label(frame6,text="Use command: 'pip install foo' to install",bg="white")
-libman3.pack()
-libman4 = tk.Label(frame6,text="Use command: list_lib to view all installed libraries",bg="white")
-libman4.pack()
-
-#--------------------------------------------------------------
-def launch_python_shell():
-  def run_python_shell():
-    subprocess.call(["python"])
-  thread = threading.Thread(target=run_python_shell)
-  # Start the thread.
-  thread.start()
-
-def launch_command_prompt():
-  """Launches the command prompt in a separate thread."""
-  def run_command_prompt():
-    subprocess.call(["cmd"])
-  thread = threading.Thread(target=run_command_prompt)
-  thread.start()
-
-def check_library(library_name):
-    """Checks if a Python library is installed and displays a message box with its version (if found).
-
-    Args:
-        library_name (str): The name of the library to check.
-    """
-
-    try:
-        # Attempt to get distribution information
-        distribution = pkg_resources.get_distribution(library_name)
-        version = distribution.version
-        messagebox.showinfo(title="Library Installed", message=f"{library_name} is installed!\n(version: {version})")
-    except pkg_resources.DistributionNotFound:
-        messagebox.showerror(title="Library Not Found", message=f"{library_name} is not installed.")
+    _libs_search_var = tk.StringVar()
+    _libs_search_entry = ttk.Entry(top, textvariable=_libs_search_var, width=15, foreground="grey")
+    _libs_search_entry.pack(side="left", padx=(10, 0))
+    _libs_search_entry.insert(0, _libs_search_placeholder)
+    _libs_search_entry.bind("<FocusIn>", _libs_on_search_focus_in)
+    _libs_search_entry.bind("<FocusOut>", _libs_on_search_focus_out)
+    _libs_search_var.trace_add("write", _libs_on_search_changed)
+ 
+    container = ttk.Frame(libsframe)
+    container.pack(side="top", fill="both", expand=True, padx=8, pady=(0, 8))
+ 
+    _libs_canvas = tk.Canvas(container, borderwidth=0, highlightthickness=0)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=_libs_canvas.yview)
+    _libs_scrollable_frame = ttk.Frame(_libs_canvas)
+ 
+    _libs_scrollable_frame.bind(
+        "<Configure>",
+        lambda e: _libs_canvas.configure(scrollregion=_libs_canvas.bbox("all"))
+    )
+ 
+    canvas_window = _libs_canvas.create_window((0, 0), window=_libs_scrollable_frame, anchor="nw")
+    _libs_canvas.configure(yscrollcommand=scrollbar.set)
+ 
+    _libs_canvas.bind(
+        "<Configure>",
+        lambda e: _libs_canvas.itemconfig(canvas_window, width=e.width)
+    )
+    
+    scrollbar.pack(side="right", fill="y")
+    _libs_canvas.pack(side="left", fill="both", expand=True)
+    
+ 
+    _libs_canvas.bind_all("<MouseWheel>", _libs_on_mousewheel)   # Windows / macOS
+    _libs_canvas.bind_all("<Button-4>", _libs_on_mousewheel)     # Linux scroll up
+    _libs_canvas.bind_all("<Button-5>", _libs_on_mousewheel)     # Linux scroll down
+ 
+def _libs_on_search_focus_in(event):
+    if _libs_search_var.get() == _libs_search_placeholder:
+        _libs_search_entry.delete(0, "end")
+        _libs_search_entry.config(foreground=config_data['textforeground'])  # Reset to normal text color
 
 
+def _libs_on_search_focus_out(event):
+    if not _libs_search_var.get():
+        _libs_search_entry.insert(0, _libs_search_placeholder)
+        _libs_search_entry.config(foreground="grey")
 
-def libcheckmain(): # IDK why the AI split this into two functions ¯\_(ツ)_/¯
-    libname = simpledialog.askstring("Enter Name:", "Enter the Name of the Library:")
-    if libname:
-        check_library(libname)
+
+def _libs_on_search_changed(*args):
+    query = _libs_search_var.get()
+    if query == _libs_search_placeholder:
+        return
+    filtered = [p for p in _libs_all_packages if query.lower() in p["name"].lower()]
+    _libs_populate_rows(filtered)
+ 
+def _libs_on_mousewheel(event):
+    if event.num == 4:
+        _libs_canvas.yview_scroll(-1, "units")
+    elif event.num == 5:
+        _libs_canvas.yview_scroll(1, "units")
     else:
-        messagebox.showerror("Error", "Please enter a Library Name.")
+        _libs_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+ 
+ 
+# ---- data / refresh --------------------------------------------------------
+ 
+def refresh_libs():
+    if _libs_python_exe is None:
+        messagebox.showerror("No Python found", "Could not locate a system python/python3 interpreter.")
+        return
+ 
+    _libs_list_button.config(state="disabled")
+    _libs_status_label.config(text="Loading...")
+    _libs_clear_rows()
+ 
+    threading.Thread(target=_libs_load_packages_thread, daemon=True).start()
+ 
+ 
+def _libs_load_packages_thread():
+    packages, dist_map = get_installed_packages(_libs_python_exe)
+    libsframe.after(0, _libs_on_packages_loaded, packages, dist_map)
+ 
+ 
+def _libs_on_packages_loaded(packages, dist_map):
+    global _libs_dist_map, _libs_all_packages
+    _libs_dist_map = dist_map
+    _libs_all_packages = packages
+    _libs_populate_rows(packages)
+    _libs_list_button.config(state="normal")
+    _libs_status_label.config(text=f"{len(packages)} found." if packages else "No packages found")
+ 
+ 
+def _libs_clear_rows():
+    global _libs_row_widgets
+    for widget in _libs_row_widgets:
+        widget.destroy()
+    _libs_row_widgets = []
+ 
+ 
+def _libs_populate_rows(packages):
+    _libs_clear_rows()
+ 
+    for pkg in packages:
+        row = ttk.Frame(_libs_scrollable_frame)
+        row.pack(side="top", fill="x", padx=4, pady=2)
+ 
+        label_text = f"{pkg['name']}  ({pkg['version']})"
+        label = ttk.Label(row, text=label_text, anchor="w")
+        label.pack(side="left", fill="x", expand=True, padx=(4, 4))
+ 
+        delete_btn = tb.Button( 
+            row, text="⨉", width=4, bootstyle="danger",
+            command=lambda name=pkg["name"]: _libs_on_delete_clicked(name)
+        )
+        ToolTip(delete_btn, msg="Delete Library", follow=True, delay=0.7, y_offset=-50, x_offset=-100)
+        delete_btn.pack(side="right", padx=(4, 4))
+ 
+        info_btn = tb.Button(
+            row, text= "🛈", width=4,
+            command=lambda name=pkg["name"]: _libs_on_info_clicked(name)
+        )
+        ToolTip(info_btn, msg="View Library Info", follow=True, delay=0.7, y_offset=-50, x_offset=-100)
+        info_btn.pack(side="right", padx=(4, 0))
+ 
+        sep = ttk.Separator(_libs_scrollable_frame, orient="horizontal")
+        sep.pack(side="top", fill="x", padx=4)
+ 
+        _libs_row_widgets.extend([row, sep])
+ 
+ 
+# ---- actions ----------------------------------------------------------------
+ 
+def _libs_on_info_clicked(name):
+    dist = _libs_dist_map.get(name)
+    if dist is None:
+        messagebox.showerror("Not found", f"No metadata found for {name}.")
+        return
+ 
+    meta = dist.metadata
+    fields = [
+        ("Name", meta.get("Name", name)),
+        ("Version", dist.version),
+        ("Summary", meta.get("Summary", "")),
+        ("Author", meta.get("Author", "") or meta.get("Author-email", "")),
+        ("License", meta.get("License", "")),
+        ("Home-page", meta.get("Home-page", "")),
+        ("Requires-Python", meta.get("Requires-Python", "")),
+        ("Location", str(getattr(dist, "_path", "")) or ""),
+    ]
+ 
+    requires = dist.requires or []
+    requires_preview = ", ".join(requires[:10]) + (" ..." if len(requires) > 10 else "")
+ 
+    win = tk.Toplevel(libsframe)
+    win.title(f"Info: {name}")
+    #win.geometry("480x420")
+ 
+    text = tk.Text(win, wrap="word")
+    text.pack(fill="both", padx=8, pady=8)
+ 
+    for label, value in fields:
+        text.insert("end", f"{label}: ", ("bold",))
+        text.insert("end", f"{value}\n\n")
+ 
+    text.insert("end", "Requires: ", ("bold",))
+    text.insert("end", requires_preview or "(none)")
+ 
+    text.tag_configure("bold", font=("TkDefaultFont", 9, "bold"))
+    text.configure(state="disabled")
+ 
+    ttk.Button(win, text="Close", command=win.destroy).pack(pady=(0, 8),fill=tk.X)
+ 
+ 
+def _libs_on_delete_clicked(name):
+    confirm = messagebox.askyesno(
+        "Confirm uninstall",
+        f"Uninstall '{name}'? This runs pip uninstall and cannot be undone."
+    )
+    if not confirm:
+        return
+ 
+    _libs_list_button.config(state="disabled")
+    _libs_status_label.config(text=f"Uninstalling {name}...")
+    threading.Thread(target=_libs_delete_thread, args=(name,), daemon=True).start()
+ 
+ 
+def _libs_delete_thread(name):
+    success, output = uninstall_package(_libs_python_exe, name)
+    libsframe.after(0, _libs_on_delete_finished, name, success, output)
+ 
+ 
+def _libs_on_delete_finished(name, success, output):
+    if success:
+        messagebox.showinfo("Uninstalled", f"'{name}' was uninstalled successfully.")
+    else:
+        messagebox.showerror("Uninstall failed", f"Failed to uninstall '{name}':\n\n{output}")
+    refresh_libs()
+ 
+ 
+# Build the UI into the existing libsframe now that everything above is defined
+build_libsframe_ui()
 
-consolelaunch = tk.Button(frame6,bg="white",text="Launch Python Shell",command=launch_python_shell)
-consolelaunch.pack(fill=tk.BOTH, pady=3)
 
-solelaunch = tk.Button(frame6,bg="white",text="Launch Command Prompt",command=launch_command_prompt)
-solelaunch.pack(fill=tk.BOTH)
+_install_pypi_index = None          # cached list of all PyPI package names, filled in by the prefetch thread
+_install_index_event = threading.Event()   # set once the prefetch thread finishes (success or failure)
+_install_python_exe = None
+_install_canvas = None
+_install_scrollable_frame = None
+_install_search_var = None
+_install_search_entry = None
+_install_search_button = None
+_install_status_label = None
+_install_row_widgets = []
+_install_search_placeholder = "🔎Search..."
+_install_max_results = 25            # how many matched names to fetch details for
+ 
+ 
+def install_package(python_exe, package_name):
+    """Install a package into the target interpreter's environment via pip."""
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+ 
+    result = subprocess.run(
+        [python_exe, "-m", "pip", "install", package_name],
+        capture_output=True, text=True, timeout=120, **kwargs
+    )
+    return result.returncode == 0, (result.stdout + result.stderr)
+ 
+ 
+def _install_fetch_pypi_index():
+    """Downloads and parses https://pypi.org/simple/ into a flat list of names."""
+    response = requests.get("https://pypi.org/simple/", timeout=20)
+    html = response.text
+ 
+    names = []
+    for chunk in html.split('<a href="')[1:]:
+        try:
+            name = chunk.split('>')[1].split('<')[0]
+            names.append(name)
+        except IndexError:
+            continue
+ 
+    return names
+ 
+ 
+def _install_prefetch_index_thread():
+    """Runs once at startup on a background thread to warm _install_pypi_index."""
+    global _install_pypi_index
+    try:
+        names = _install_fetch_pypi_index()
+        _install_pypi_index = names
+    except Exception as e:
+        _install_pypi_index = []
+        installframe.after(0, _install_on_prefetch_failed, str(e))
+        _install_index_event.set()
+        return
+ 
+    installframe.after(0, _install_on_prefetch_done)
+    _install_index_event.set()
+ 
+ 
+def _install_on_prefetch_done():
+    # Only touch the status label if the user hasn't already started searching
+    if _install_status_label.cget("text") == "Loading package list...":
+        _install_status_label.config(text="")
+ 
+ 
+def _install_on_prefetch_failed(error_text):
+    _install_status_label.config(text="Package index failed to load")
+    print(f"Failed to prefetch PyPI index: {error_text}")
+ 
+ 
+def _install_fetch_package_summary(name):
+    """Fetch short description for a single package. Returns '' on any failure."""
+    try:
+        response = requests.get(f"https://pypi.org/pypi/{name}/json", timeout=5)
+        if response.status_code != 200:
+            return ""
+        data = response.json()
+        return data.get("info", {}).get("summary", "") or ""
+    except Exception:
+        return ""
+ 
+ 
+# ---- UI setup -------------------------------------------------------------
+ 
+def build_installframe_ui():
+    global _install_canvas, _install_scrollable_frame
+    global _install_search_var, _install_search_entry, _install_search_button
+    global _install_status_label, _install_python_exe
+ 
+    _install_python_exe = find_system_python()
+ 
+    container = ttk.Frame(installframe)
+    container.pack(side="top", fill="both", expand=True, padx=8, pady=(8, 0))
+ 
+    _install_canvas = tk.Canvas(container, borderwidth=0, highlightthickness=0)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=_install_canvas.yview)
+    _install_scrollable_frame = ttk.Frame(_install_canvas)
+ 
+    _install_scrollable_frame.bind(
+        "<Configure>",
+        lambda e: _install_canvas.configure(scrollregion=_install_canvas.bbox("all"))
+    )
+ 
+    canvas_window = _install_canvas.create_window((0, 0), window=_install_scrollable_frame, anchor="nw")
+    _install_canvas.configure(yscrollcommand=scrollbar.set)
+ 
+    _install_canvas.bind(
+        "<Configure>",
+        lambda e: _install_canvas.itemconfig(canvas_window, width=e.width)
+    )
+ 
+    _install_canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+ 
+    _install_canvas.bind_all("<MouseWheel>", _install_on_mousewheel)
+    _install_canvas.bind_all("<Button-4>", _install_on_mousewheel)
+    _install_canvas.bind_all("<Button-5>", _install_on_mousewheel)
+ 
+    # Bottom bar: status label + search box + search button
+    bottom = ttk.Frame(installframe)
+    bottom.pack(side="bottom", fill="x", padx=8, pady=8)
+ 
+    _install_status_label = ttk.Label(bottom, text="")
+    _install_status_label.pack(side="left")
+ 
+    _install_search_button = ttk.Button(bottom, text="🔎Search", command=_install_on_search_clicked)
+    _install_search_button.pack(side="right")
+ 
+    _install_search_var = tk.StringVar()
+    _install_search_entry = ttk.Entry(bottom, textvariable=_install_search_var, foreground="grey")
+    _install_search_entry.pack(side="right", fill="x", expand=True, padx=(10, 10))
+    _install_search_entry.insert(0, _install_search_placeholder)
+    _install_search_entry.bind("<FocusIn>", _install_on_search_focus_in)
+    _install_search_entry.bind("<FocusOut>", _install_on_search_focus_out)
+    _install_search_entry.bind("<Return>", lambda e: _install_on_search_clicked())
+ 
+ 
+def _install_on_mousewheel(event):
+    if event.num == 4:
+        _install_canvas.yview_scroll(-1, "units")
+    elif event.num == 5:
+        _install_canvas.yview_scroll(1, "units")
+    else:
+        _install_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+ 
+ 
+def _install_on_search_focus_in(event):
+    if _install_search_var.get() == _install_search_placeholder:
+        _install_search_entry.delete(0, "end")
+        _install_search_entry.config(foreground=config_data['textforeground'])  # Reset to normal text color
+ 
+ 
+def _install_on_search_focus_out(event):
+    if not _install_search_var.get():
+        _install_search_entry.insert(0, _install_search_placeholder)
+        _install_search_entry.config(foreground="grey")
+ 
+ 
+# ---- search flow ------------------------------------------------------------
+ 
+def _install_on_search_clicked():
+    query = _install_search_var.get().strip()
+    if not query or query == _install_search_placeholder:
+        return
+ 
+    _install_search_button.config(state="disabled")
+    _install_clear_rows()
+    _install_status_label.config(text="Searching...")
+    threading.Thread(target=_install_search_thread, args=(query,), daemon=True).start()
+ 
+ 
+def _install_search_thread(query):
+    # If the startup prefetch is still running, this just waits for it in the
+    # background — the main window is never blocked. If it already finished,
+    # this returns instantly.
+    _install_index_event.wait()
+ 
+    index = _install_pypi_index or []
+    matches = [n for n in index if query.lower() in n.lower()][:_install_max_results]
+ 
+    results = []
+    for name in matches:
+        summary = _install_fetch_package_summary(name)
+        results.append({"name": name, "summary": summary})
+ 
+    installframe.after(0, _install_on_search_finished, results)
+ 
+ 
+def _install_on_search_finished(results):
+    _install_search_button.config(state="normal")
+    _install_status_label.config(text=f"{len(results)} result(s)" if results else "No matches found")
+    _install_populate_rows(results)
+ 
+ 
+def _install_clear_rows():
+    global _install_row_widgets
+    for widget in _install_row_widgets:
+        widget.destroy()
+    _install_row_widgets = []
+ 
+ 
+def _install_populate_rows(results):
+    _install_clear_rows()
 
-serlaunch = tk.Button(frame6,bg="white",text="Check if Python Library is Installed...",command=libcheckmain)
-serlaunch.pack(fill=tk.BOTH, pady=3)
+    for pkg in results:
+        row = ttk.Frame(_install_scrollable_frame)
+        row.pack(side="top", fill="x", padx=4, pady=6)
+
+        # Button packed first so it keeps its space before the text side expands
+        install_btn = ttk.Button(
+            row, text="↓",
+            command=lambda name=pkg["name"]: _install_on_install_clicked(name)
+        )
+        install_btn.pack(side="right", padx=(4, 4), anchor="n")
+
+        text_frame = ttk.Frame(row)
+        text_frame.pack(side="left", fill="both", expand=True, padx=(4, 4))
+
+        name_label = ttk.Label(text_frame, text=pkg["name"], font=("TkDefaultFont", 10, "bold"), anchor="w")
+        name_label.pack(side="top", fill="x", anchor="w")
+
+        desc_text = pkg["summary"] or "(no description available)"
+        desc_label = ttk.Label(text_frame, text=desc_text, anchor="w", justify="left")
+        desc_label.pack(side="top", fill="x", anchor="w")
+        # Re-wrap the description to whatever width it's actually given each time
+        # the row resizes, instead of a hardcoded wraplength — this is what stops
+        # long descriptions from getting cut off no matter the window size.
+        desc_label.bind("<Configure>", lambda e, lbl=desc_label: lbl.config(wraplength=e.width))
+
+        sep = ttk.Separator(_install_scrollable_frame, orient="horizontal")
+        sep.pack(side="top", fill="x", padx=4)
+
+        _install_row_widgets.extend([row, sep])
+ 
+ 
+# ---- install action -----------------------------------------------------------
+ 
+def _install_on_install_clicked(name):
+    confirm = messagebox.askyesno("Confirm install", f"Install '{name}'?")
+    if not confirm:
+        return
+ 
+    _install_search_button.config(state="disabled")
+    _install_status_label.config(text=f"Installing {name}...")
+    threading.Thread(target=_install_install_thread, args=(name,), daemon=True).start()
+ 
+ 
+def _install_install_thread(name):
+    success, output = install_package(_install_python_exe, name)
+    installframe.after(0, _install_on_install_finished, name, success, output)
+ 
+ 
+def _install_on_install_finished(name, success, output):
+    _install_search_button.config(state="normal")
+    _install_status_label.config(text="")
+    if success:
+        messagebox.showinfo("Installed", f"'{name}' was installed successfully.")
+    else:
+        messagebox.showerror("Install failed", f"Failed to install '{name}':\n\n{output}")
+ 
+ 
+# Build the UI into the existing installframe now that everything above is defined
+build_installframe_ui()
+ 
+# Kick off the PyPI index download immediately, on a background thread, so it's
+# already warm by the time the user runs their first search.
+_install_status_label.config(text="Loading package list...")
+threading.Thread(target=_install_prefetch_index_thread, daemon=True).start()
+
+
 
 # Simple function to copy all and cut all
 def copy_all(event=None):
