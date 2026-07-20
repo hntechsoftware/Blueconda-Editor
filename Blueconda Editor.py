@@ -137,13 +137,6 @@ textandlineborder = 0 # For UI debugging purposes
 #    pass
 
 
-
-import subprocess
-import tkinter as tk
-from tkinter import ttk
-import os
-import sys
-
 def build_exe(script_path, AppToLaunch, EnableWait:bool):
     # 1. Setup the Toplevel
     popup = tk.Toplevel()
