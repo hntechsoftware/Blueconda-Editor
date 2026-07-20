@@ -15,9 +15,16 @@
 [Official Website](https://hntechsoftware.github.io/blueconda)
 
 ## What is Blueconda?
-The Code Editor that's the iOS of IDEs. Designed to be sleek, smooth, and simple to use so you can focus on learning and writing code.
+Blueconda is a beginner-friendly Python code editor. Designed to be sleek, smooth, and simple to use so you can focus on learning and writing code.
 
 Packed with familiar IDE features as well as its own unique ones, such as builtin Markdown Editor, Color Picker and GUI Builder, Blueconda is the all-in-one solution for a beginner to build their dreams.
+
+# Why use Blueconda?
+Blueconda is designed to accomodate perfectly for every beginner need:
+- handle tasks such as **library installation, feature documentation, compiler installing, dependency management, error messages, code linting, etc** in a much simpler automatic way, without needing to touch a compiler.
+- Sleek UI, closer to a modern app than a complex IDE
+- Usable directly out of the box, as a **full ecosystem** with simple documentation, markdown file editing, code linting, and GUI element designing all packaged
+
 
 ## Features
 -  All the features you'd expect, such as **syntax highlight, file explorer, line numbers and function outline.** 
