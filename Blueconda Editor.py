@@ -58,6 +58,7 @@ import builtins
 import shutil
 import tkchart
 from importlib import metadata
+from urllib.parse import urlparse
 
 # Define theme for app
 themeblueconda = { # This was redacted later
@@ -523,7 +524,6 @@ def pythoninstallwindow():
     tk.Button(pywin, text="Start", command=installpythoncompiler).pack(fill=tk.X, expand=True, padx=10)
     pywinstyles.change_header_color(pywin, color=config_data['background'])
     maximize_minimize_button.hide(pywin)
-# TODO fix the undo/redo (minimal reproducible example)
 
 
 def get_greeting(): # simple function to retrieve appropriate greeting
@@ -1177,7 +1177,8 @@ style = ttk.Style()
 style.configure("TNotebook", background="white")
 style.configure("TNotebook.Tab", background="white")
 
-
+newstyle= tb.Style()
+newstyle.configure('custom.TButton', font=fontnew)
 
 
 
@@ -1402,7 +1403,8 @@ notebook.select(3)
 notebook.grid(row=2, column=3, columnspan=2, sticky="NSEW")
 
 
-#Code for minimap
+# Code for minimap 
+# TODO This blocks Undo Redo, fix in a later version release
 class TextPeer(tk.Text):
   """A peer of an existing text widget with line number synchronization"""
   count = 0
@@ -2345,7 +2347,8 @@ def helpinfo(event):
   else:
     newlabel.place_forget()
 
-usertext.bind("<<Selection>>", helpinfo)
+# usertext.bind("<<Selection>>", helpinfo)
+# TODO One day this'll be fixed... that day is not today
 
 vars_tree = tb.Treeview(frame3, height=20, bootstyle="light")
 vars_tree["columns"] = ("value")
@@ -2538,85 +2541,269 @@ def get_random_affirmation():
     newaffim = random.choice(affims)
     return newaffim
 
-def finderrorlinks(error_message):
-    query = f"{error_message} solution"
-    links = []
+
+def sanitize_error_message(error_message):
+    """Pull the actual exception line out of a traceback, rather than 
+    feeding the whole multi-line blob into the search query."""
+    lines = [l.strip() for l in error_message.strip().splitlines() if l.strip()]
+    if not lines:
+        return ""
+    # The real error is almost always the last non-empty line
+    last_line = lines[-1]
+    # Strip caret pointers like "^" and File "...", line N noise
+    last_line = re.sub(r'File\s+".*?",\s*line\s*\d+', '', last_line)
+    last_line = last_line.replace('^', '').strip()
+    return last_line
+
+def get_clean_error_message(filepath):
+    """Run the script directly with plain Python (not friendly) purely to
+    get a reliable, standard-format traceback. The last non-empty line of
+    a Python traceback is ALWAYS 'ExceptionType: message' — this is
+    guaranteed by the language, unlike friendly's decorative formatting."""
     try:
-        for url in search(query, num_results=5, lang='en'):
-            links.append(url)
+        result = subprocess.run(
+            [sys.executable, filepath],
+            capture_output=True, text=True, timeout=10
+        )
+    except subprocess.TimeoutExpired:
+        return None
+
+    if result.returncode == 0:
+        return None  # script ran fine, no error to search for
+
+    stderr_lines = [l for l in result.stderr.splitlines() if l.strip()]
+    if not stderr_lines:
+        return None
+
+    return stderr_lines[-1]  # e.g. "SyntaxError: '(' was never closed"
+
+def get_page_title(url, timeout=4):
+    """Fetch a readable page title; fall back to domain name if it fails."""
+    domain = urlparse(url).netloc.replace('www.', '').split('.')[0]
+    try:
+        resp = requests.get(url, timeout=timeout, headers={'User-Agent': 'Mozilla/5.0'})
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        title_tag = soup.find('title')
+        if title_tag and title_tag.text.strip():
+            return f"{domain.capitalize()}: {title_tag.text.strip()}"
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"Could not fetch title for {url}: {e}")
+    return f"{domain.capitalize()}: {url}"
+
+def duckduckgo_search(query, num_results=5, timeout=6):
+    """Scrape DuckDuckGo's lite HTML endpoint. No API key needed, and it's
+    far less aggressive about blocking scrapers than Google."""
+    url = "https://lite.duckduckgo.com/lite/"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    params = {'q': query}
+
+    try:
+        resp = requests.post(url, data=params, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"DuckDuckGo search request failed: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    links = []
+
+    for a in soup.find_all('a', class_='result-link'):
+        href = a.get('href', '')
+        if href.startswith('http'):
+            links.append(href)
+        if len(links) >= num_results:
+            break
+
+    # Fallback selector, DDG's lite markup shifts occasionally
+    if not links:
+        for a in soup.find_all('a'):
+            href = a.get('href', '')
+            if href.startswith('http') and 'duckduckgo.com' not in href:
+                links.append(href)
+            if len(links) >= num_results:
+                break
+
     return links
 
+
+def finderrorlinks(error_message):
+    query = f"{sanitize_error_message(error_message)} solution"
+    print(f"Searching for: {query}")
+    results = []
+
+    urls = duckduckgo_search(query, num_results=5)
+    if not urls:
+        print("No URLs returned from search - check network/DDG markup changes")
+        return results
+
+    for url in urls:
+        label = get_page_title(url)
+        results.append((label, url))
+
+    return results
+
 def ShowSolutions(err):
-    
+    # search_btn.configure(text="Searching...")
+    time.sleep(0.3)  # Allow button text to update before search starts (lazy solution)
+    link_data = finderrorlinks(err)  # list of (label, url) tuples
+
     def on_listbox_select(event):
-        selected_indices = listbox.curselection()
+        selected_indices = errlistbox.curselection()
         if selected_indices:
             index = selected_indices[0]
-            selected_item = listbox.get(index)
-            webbrowser.open_new_tab(selected_item)
+            if 0 <= index < len(link_data):
+                webbrowser.open_new_tab(link_data[index][1])
 
-
-    win = tk.Toplevel()                            
-    win.attributes('-topmost', True)               
-    win.attributes("-alpha", 0.9)                  
-    # win.geometry("Width x Height")                 
-    win.configure(bg=config_data["background"])    
+    win = tk.Toplevel()
+    # win.attributes('-topmost', True)
+    win.attributes("-alpha", 0.9)
+    win.configure(bg=config_data["background"])
     win.title("Error Solutions")
 
+    tk.Label(
+        win, text="The following solutions were found for your error:\n(Double-Click to open in browser:)",
+        background=config_data['background'],
+        ).pack(pady=10)
     errlistbox = tk.Listbox(win, font=fontnew, bg=config_data['background'], fg=config_data['textforeground'])
     errlistbox.pack(fill=tk.BOTH, expand=True)
 
-    for link in finderrorlinks(err):
-        errlistbox.insert(tk.END, link)
+    if link_data:
+        for label, url in link_data:
+            errlistbox.insert(tk.END, label)
+    else:
+        errlistbox.insert(tk.END, "No solutions found.")
+
     errlistbox.bind('<Double-1>', on_listbox_select)
 
-    pywinstyles.change_header_color(win, color=config_data['background'])  
-    maximize_minimize_button.hide(win)   
+    # Resize the window to fit the listbox content
+    win.geometry(f"{screen_width}x{errlistbox.winfo_reqheight()+150}")
+    pywinstyles.change_header_color(win, color=config_data['background'])
+    maximize_minimize_button.hide(win)
+    # search_btn.configure(text="Search for Answer Online")  # Reset button text after search
+
 
 def runinterminal():
     try:
         subprocess.run(['friendly', '--version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:
-    # Friendly Traceback module not found, show message box
         messagebox.showerror(
-        "Friendly Missing",
-        "Friendly is not installed.\nUse the Library Manager to install Friendly for Error Msgs.\nCommand: pip install friendly")
+            "Friendly Missing",
+            "Friendly is not installed.\nUse the Library Manager to install Friendly for Error Msgs.")
         return
+
+    filepath = "temp/qruncodec.py"
+
     nwin = tk.Toplevel()
     nwin.attributes('-topmost', True)
     nwin.attributes("-alpha", 0.9)
     nwin.minsize(800, 500)
     nwin.title("Error Occured")
-    command = "friendly temp/qruncodec.py"
+    command = f"friendly {filepath}"
     output_text = tb.ScrolledText(nwin, wrap="word")
     output_text.pack(fill=tk.BOTH, expand=True)
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
 
-        # Display the output in the Text widget
-    output_text.delete("1.0", tk.END)  # Clear previous output
-
     newsd = str(result.stdout).replace("|", "")
     newsr = str(result.stderr).replace("|", "")
 
-    output_text.insert(tk.END, newsd)
-    output_text.insert(tk.END, newsr)
-    text = output_text.get(1.0, tk.END)
-    output_text.delete(1.0, tk.END)
-    lines = text.splitlines()
-    if len(lines) > 2:
-        text = "\n".join(lines[2:-2])
+    full_output = newsd + newsr
+    lines = full_output.splitlines()
+    trimmed_lines = lines[2:-2] if len(lines) > 4 else lines
+    trimmed_text = "\n".join(trimmed_lines).strip()
 
-    output_text.insert(1.0, text + "\n\n" + get_random_affirmation())
-    # output_text.insert(tk.END, text)
+    output_text.delete("1.0", tk.END)
+    output_text.insert(tk.END, trimmed_text + "\n\n" + get_random_affirmation())
     output_text.config(state="disabled")
-    errormsg = output_text.get("2.0", "5.0") # To use for searching for answer
-    tk.Button(nwin, text="Search for Answer Online", command=lambda: ShowSolutions(errormsg)).pack(fill=tk.BOTH, expand=True, pady=8)
-    tk.Button(nwin, text="Ask AI For Answer").pack(fill=tk.BOTH, expand=True)
-    pywinstyles.change_header_color(nwin, color=config_data['background'])
-    maximize_minimize_button.hide(nwin) # TODO Finish this man
 
+    # Get a clean, reliable error message separately - not from friendly's
+    # decorated text, but from a plain Python run of the same file.
+    errormsg = get_clean_error_message(filepath)
+    print(f"Extracted errormsg: {errormsg!r}")  # debug line, remove once confirmed working
+
+    search_btn = tk.Button(
+        nwin, text="Search for Answer Online",
+        command=lambda: ShowSolutions(errormsg) if errormsg else messagebox.showinfo("No Error", "No error was detected to search for.")
+    )
+    search_btn.pack(fill=tk.BOTH, expand=True, pady=8)
+
+
+    pywinstyles.change_header_color(nwin, color=config_data['background'])
+    maximize_minimize_button.hide(nwin)
+
+
+def install_dependencies():
+
+    dependencies = ["friendly", "flake8", "pyinstaller"]
+
+    def run_installs():
+        install_btn.config(state="disabled", text="Installing...")
+        output_text.config(state="normal")
+        output_text.delete("1.0", tk.END)
+
+        for package in dependencies:
+            output_text.insert(tk.END, f"--- Installing {package} ---\n")
+            output_text.see(tk.END)
+            output_text.update_idletasks()
+
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", package],
+                capture_output=True, text=True
+            )
+
+            output_text.insert(tk.END, result.stdout)
+            if result.stderr:
+                output_text.insert(tk.END, result.stderr)
+
+            if result.returncode == 0:
+                output_text.insert(tk.END, f"--- {package} installed successfully ---\n\n")
+            else:
+                output_text.insert(tk.END, f"--- {package} FAILED to install ---\n\n")
+
+            output_text.see(tk.END)
+            output_text.update_idletasks()
+
+        output_text.insert(tk.END, "All installations finished.")
+        output_text.see(tk.END)
+        output_text.config(state="disabled")
+        install_btn.config(state="normal", text="Click to Begin Installing Dependencies")
+
+    def start_install_thread():
+        # Run in a separate thread so the pip install output can stream
+        # into the text widget live, instead of freezing the whole GUI
+        # until all installs finish.
+        threading.Thread(target=run_installs, daemon=True).start()
+
+    win = tk.Toplevel()
+    win.attributes('-topmost', True)
+    win.attributes("-alpha", 0.9)
+    win.configure(bg=config_data["background"])
+    win.title("Installing Dependencies")
+
+    install_btn = tk.Button(win, text="Click to Begin Installing Dependencies", command=start_install_thread)
+    install_btn.pack(fill=tk.BOTH, pady=8)
+
+    output_text = tb.ScrolledText(win, wrap="word")
+    output_text.pack(fill=tk.BOTH, expand=True)
+
+    # Pre-fill the list of what will be installed, before the button is pressed
+    output_text.insert(tk.END, "Dependencies to install:\n")
+    for package in dependencies:
+        output_text.insert(tk.END, f" - {package}\n")
+    output_text.config(state="disabled")
+
+    pywinstyles.change_header_color(win, color=config_data['background'])
+    maximize_minimize_button.hide(win)
+
+def DependencyManager():
+    '''
+    Launches dependency installation in a new thread.
+    '''
+    installerthread = threading.Thread(target=install_dependencies)
+    installerthread.start()
+
+# Poorly written function, its almost three years old and never got rewritten 
+# since it... somehow still works fine
 def quickrunmain():
     qrunfile = open("temp/qruncodec.py","w",encoding='utf-8')
     qrunfile.write("import os")
@@ -3232,7 +3419,6 @@ def guibuilder():
     except Exception: # This is used for people who are building from source and don't have .exe
         build_exe("GUIBuilder.py","GUIBuilder.exe", False)
 
-# Code for Execute: 
 def pythonrun():
 
     with open("temp/currentfile.txt", "r", encoding="utf=8") as dhamaka:
@@ -3275,10 +3461,80 @@ def pythonrun():
 
     subprocess.call(f'start cmd /K python "{full_path}"', shell=True)
 
+    # NEW: the cmd /K window above runs detached and async, so its return
+    # code doesn't tell us if the script actually errored. To check, we run
+    # the same script a second time, silently, in the background, purely to
+    # detect success/failure - the visible cmd window above is untouched.
+    check_for_errors(full_path)
 
     # Change back the directory
     os.chdir(current_dir)
 
+
+def check_for_errors(full_path, timeout=10):
+    """Silently re-runs the script to detect if it errors. If it does,
+    pulls up the Friendly traceback window for the user."""
+    try:
+        result = subprocess.run(
+            [sys.executable, full_path],
+            capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        # Script is likely waiting on input() or running long - can't
+        # reliably judge success/failure here, so just skip the popup
+        return
+
+    if result.returncode != 0:
+        show_friendly_traceback(full_path)
+
+# This function had to be redone here because it wasn't fully usable
+# From outside the Quick Run.
+# Ideally it'd be one function but this is a lazy fix, TWO identical functions.
+def show_friendly_traceback(filepath):
+    """Displays a Friendly traceback window for the given script, same
+    style as runinterminal(), but parameterized so it works for any file
+    instead of being hardcoded to temp/qruncodec.py."""
+    try:
+        subprocess.run(['friendly', '--version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        messagebox.showerror(
+            "Friendly Missing",
+            "Friendly is not installed.\nUse the Library Manager to install Friendly for Error Msgs.\nCommand: pip install friendly")
+        return
+
+    nwin = tk.Toplevel()
+    nwin.attributes('-topmost', True)
+    nwin.attributes("-alpha", 0.9)
+    nwin.minsize(800, 500)
+    nwin.title("Error Occured")
+    command = f'friendly "{filepath}"'
+    output_text = tb.ScrolledText(nwin, wrap="word")
+    output_text.pack(fill=tk.BOTH, expand=True)
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+    newsd = str(result.stdout).replace("|", "")
+    newsr = str(result.stderr).replace("|", "")
+
+    full_output = newsd + newsr
+    lines = full_output.splitlines()
+    trimmed_lines = lines[2:-2] if len(lines) > 4 else lines
+    trimmed_text = "\n".join(trimmed_lines).strip()
+
+    output_text.delete("1.0", tk.END)
+    output_text.insert(tk.END, trimmed_text + "\n\n" + get_random_affirmation())
+    output_text.config(state="disabled")
+
+    errormsg = get_clean_error_message(filepath)
+    print(f"Extracted errormsg: {errormsg!r}")  # debug line, remove once confirmed working
+
+    search_btn = tk.Button(
+        nwin, text="Search for Answer Online",
+        command=lambda: ShowSolutions(errormsg) if errormsg else messagebox.showinfo("No Error", "No error was detected to search for.")
+    )
+    search_btn.pack(fill=tk.BOTH, expand=True, pady=8)
+
+    pywinstyles.change_header_color(nwin, color=config_data['background'])
+    maximize_minimize_button.hide(nwin)
 '''
 #Code to Run with Threading for Terminate | pythonrunV2
 script_thread = None
@@ -3889,14 +4145,14 @@ def _libs_populate_rows(packages):
         label.pack(side="left", fill="x", expand=True, padx=(4, 4))
  
         delete_btn = tb.Button( 
-            row, text="⨉", width=4, bootstyle="danger",
+            row, text="⨉", width=4, bootstyle="danger", 
             command=lambda name=pkg["name"]: _libs_on_delete_clicked(name)
         )
         ToolTip(delete_btn, msg="Delete Library", follow=True, delay=0.7, y_offset=-50, x_offset=-100)
         delete_btn.pack(side="right", padx=(4, 4))
  
         info_btn = tb.Button(
-            row, text= "🛈", width=4,
+            row, text= "🛈", width=4, 
             command=lambda name=pkg["name"]: _libs_on_info_clicked(name)
         )
         ToolTip(info_btn, msg="View Library Info", follow=True, delay=0.7, y_offset=-50, x_offset=-100)
@@ -4157,23 +4413,30 @@ def _install_search_thread(query):
     # background — the main window is never blocked. If it already finished,
     # this returns instantly.
     _install_index_event.wait()
- 
+
     index = _install_pypi_index or []
-    matches = [n for n in index if query.lower() in n.lower()][:_install_max_results]
- 
+    query_lower = query.lower()
+
+    # Split into an exact name match (if any) and everything else that just
+    # contains the query, so the exact one can be shown first and separately.
+    exact_matches = [n for n in index if n.lower() == query_lower]
+    similar_matches = [n for n in index if n.lower() != query_lower and query_lower in n.lower()]
+
+    ordered_matches = (exact_matches + similar_matches)[:_install_max_results]
+    exact_count = len(exact_matches)
+
     results = []
-    for name in matches:
+    for name in ordered_matches:
         summary = _install_fetch_package_summary(name)
         results.append({"name": name, "summary": summary})
- 
-    installframe.after(0, _install_on_search_finished, results)
- 
- 
-def _install_on_search_finished(results):
+
+    installframe.after(0, _install_on_search_finished, results, exact_count)
+
+
+def _install_on_search_finished(results, exact_count=0):
     _install_search_button.config(state="normal")
     _install_status_label.config(text=f"{len(results)} result(s)" if results else "No matches found")
-    _install_populate_rows(results)
- 
+    _install_populate_rows(results, exact_count)
  
 def _install_clear_rows():
     global _install_row_widgets
@@ -4182,18 +4445,39 @@ def _install_clear_rows():
     _install_row_widgets = []
  
  
-def _install_populate_rows(results):
+def _install_populate_rows(results, exact_count=0):
     _install_clear_rows()
 
-    for pkg in results:
+    if exact_count > 0:
+        heading = ttk.Label(
+            _install_scrollable_frame, foreground=config_data["variable"],
+            text="Exact Match" if exact_count == 1 else "Exact Matches",
+            font=("TkDefaultFont", 9, "bold")
+        )
+        heading.pack(side="top", fill="x", anchor="w", padx=4, pady=(4, 2))
+        _install_row_widgets.append(heading)
+
+    for i, pkg in enumerate(results):
+        # Right after the exact match(es), drop in the "Similar Matches" heading
+        # before continuing with the rest of the list.
+        if exact_count > 0 and i == exact_count:
+            similar_heading = ttk.Label(
+                _install_scrollable_frame, text="Similar Matches",
+                font=("TkDefaultFont", 9, "bold"), foreground=config_data["variable"]
+            )
+            similar_heading.pack(side="top", fill="x", anchor="w", padx=4, pady=(10, 2))
+            _install_row_widgets.append(similar_heading)
+
         row = ttk.Frame(_install_scrollable_frame)
         row.pack(side="top", fill="x", padx=4, pady=6)
 
-        # Button packed first so it keeps its space before the text side expands
-        install_btn = ttk.Button(
-            row, text="↓",
+        install_btn = tb.Button(
+            row, text="↓", font=fontnew,
             command=lambda name=pkg["name"]: _install_on_install_clicked(name)
         )
+
+        ToolTip(install_btn, msg="Install Library", follow=True, delay=0.7, y_offset=-50, x_offset=-100)
+
         install_btn.pack(side="right", padx=(4, 4), anchor="n")
 
         text_frame = ttk.Frame(row)
@@ -4205,16 +4489,12 @@ def _install_populate_rows(results):
         desc_text = pkg["summary"] or "(no description available)"
         desc_label = ttk.Label(text_frame, text=desc_text, anchor="w", justify="left")
         desc_label.pack(side="top", fill="x", anchor="w")
-        # Re-wrap the description to whatever width it's actually given each time
-        # the row resizes, instead of a hardcoded wraplength — this is what stops
-        # long descriptions from getting cut off no matter the window size.
         desc_label.bind("<Configure>", lambda e, lbl=desc_label: lbl.config(wraplength=e.width))
 
         sep = ttk.Separator(_install_scrollable_frame, orient="horizontal")
         sep.pack(side="top", fill="x", padx=4)
 
         _install_row_widgets.extend([row, sep])
- 
  
 # ---- install action -----------------------------------------------------------
  
@@ -4485,7 +4765,7 @@ edit_menu.add_command(label="Fullscreen",command=fullscreen)
 # Add a help menu
 help_menu = tk.Menu(window, tearoff=0)
 help_menu.add_command(label="Install Python", command=pythoninstallwindow)
-help_menu.add_command(label="Install All Dependencies", command=pythoninstallwindow) # TODO make it do all dependencies
+help_menu.add_command(label="Install All Dependencies", command=DependencyManager) 
 help_menu.add_command(label="Lookup Function", command=lookfunction)
 help_menu.add_separator()
 help_menu.add_command(label="Documentation", command=documentationopen)
