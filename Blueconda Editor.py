@@ -1305,6 +1305,7 @@ class Application(tb.Frame):
         # If it is a folder, loads its content.
         self.load_subitems(iid)
     def on_file_select(self, event: tk.Event) -> None:
+        global file_loaded
         iid = self.treeview.selection()[0]
         path = self.fsobjects[iid]
         if path.suffix == ".py":
@@ -1319,6 +1320,8 @@ class Application(tb.Frame):
                 tag_all()
                 with open("temp/currentfile.txt","w") as rw:
                     rw.write(str(path))
+                usertext.edit_modified(False)
+                file_loaded = True
             else:
                 messagebox.showerror("Abandoned","Task abandoned, no file opened.")
         elif os.path.isfile(path):
