@@ -1720,7 +1720,7 @@ def update_vars_listbox(code): #TODO Fix error: AttributeError: 'Subscript' obje
                     vars_tree.insert("", tk.END, text=f"A variable with a\nkeyword name caught\n({target.id})")
 
     for var, value in vars_dict.items():
-        item_id = vars_tree.insert("", tk.END, text=var, values=(value,)) # TODO Fix Var List Display error
+        item_id = vars_tree.insert("", tk.END, text=var, values=(value,)) 
         vars_tree.tag_configure("value_tag", foreground=config_data['textforeground']) # Left here for customization purposes (Applies to both columns)
         vars_tree.item(item_id, tags="value_tag")  # Apply the tag to the value column
 
@@ -2266,8 +2266,21 @@ def ResourceUsageWindow():
     maximize_minimize_button.hide(rwin)  
 
 
-
-# TODO add a feature to change icons to bland ones
+def swap_icons():
+  '''
+  Change between simple icons and regular icons
+  '''
+  temp_name = "src_temp_swap_xyz"
+  os.rename("src", temp_name)
+  os.rename("srcminimalist", "src")
+  os.rename(temp_name, "srcminimalist")
+  newtoast = ToastNotification(
+        title="Icon Pack Changed!",
+        message=f"Icon Pack changed.\nRestart to see changes.",
+        duration=3000,
+        icon="🎨"
+    )
+  newtoast.show_toast()
 
 def get_help_info(selected_text):
   """Gets help information for the selected text in a separate thread.
@@ -2446,7 +2459,7 @@ def changetheme(): # Changes only reflect when app restarted
 
 
 def transluscent():
-    window.attributes("-alpha", 0.95)
+    window.attributes("-alpha", 0.92)
 
 def opaque():
     window.attributes("-alpha", 1)
@@ -2457,7 +2470,7 @@ def settings(): # TO-DO fix this ugly UI ... NOPE. LATER. Bigger fish to fry.
     setmenu.attributes('-topmost', True)
     setmenu.attributes("-alpha", 0.9)
     setmenu.configure(bg=config_data['background'])
-    setmenu.geometry(scalewindow(600, 650))
+    setmenu.geometry(f"400x{screen_height}")
     setmenu.title("Settings")
     label1 = tk.Label(setmenu,bg="white",font=genfont,text="Settings")
     label1.pack()
@@ -2519,11 +2532,13 @@ def settings(): # TO-DO fix this ugly UI ... NOPE. LATER. Bigger fish to fry.
     tk.Button(setmenu, text="Change Theme", command=changetheme).pack(fill=tk.BOTH, pady=10)
     tk.Button(setmenu, text="Change Font", command=changefont).pack(fill=tk.BOTH, pady=10)
     transparentframe = tb.Frame(setmenu)
-    transparentframe.pack(fill=tk.BOTH, pady=5)
+    transparentframe.pack(fill=tk.X, pady=5)
 
     tk.Label(transparentframe, text="Set Window Opacity:").grid(row=0, column=0)
     tk.Button(transparentframe, command=transluscent, text=" Transluscent ").grid(row=0, column=1, padx=4, sticky="EW")
     tk.Button(transparentframe, command=opaque, text="  Opaque  ").grid(row=0, column=2, padx=4, sticky="EW")
+
+    tk.Button(setmenu, text="Swap Icon Pack", command=swap_icons).pack(fill=tk.X, pady=10)
 
     pywinstyles.change_header_color(setmenu, color=config_data['background'])
     maximize_minimize_button.hide(setmenu)
