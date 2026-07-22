@@ -2784,10 +2784,13 @@ def install_dependencies():
         install_btn.config(state="normal", text="Click to Begin Installing Dependencies")
 
     def start_install_thread():
+        if checkwifistatus(): # Ensure wifi is working
         # Run in a separate thread so the pip install output can stream
         # into the text widget live, instead of freezing the whole GUI
         # until all installs finish.
-        threading.Thread(target=run_installs, daemon=True).start()
+            threading.Thread(target=run_installs, daemon=True).start()
+        else: # Deploy error message
+            messagebox.showerror("No WiFi", "Please check your WiFi connection and try again.")
 
     win = tk.Toplevel()
     win.attributes('-topmost', True)
