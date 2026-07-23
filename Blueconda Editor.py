@@ -2468,7 +2468,7 @@ def helpinfo(event):
     newlabel.place_forget()
 
 # usertext.bind("<<Selection>>", helpinfo)
-# TODO One day this'll be fixed... that day is not today
+# TO-DO One day this'll be fixed... that day is not today
 
 vars_tree = tb.Treeview(frame3, height=20, bootstyle="light")
 vars_tree["columns"] = ("value")
@@ -3135,7 +3135,8 @@ def open_file():
     file_loaded = True
     usertext.edit_modified(False)
 
-
+# TODO finish context menu and file assoc settings for Stable release
+# TODO add check for updates
 
 def save_file_as():
     file_path = filedialog.asksaveasfilename(
@@ -4653,7 +4654,7 @@ build_installframe_ui()
 # Kick off the PyPI index download immediately, on a background thread, so it's
 # already warm by the time the user runs their first search.
 _install_status_label.config(text="Loading package list...")
-threading.Thread(target=_install_prefetch_index_thread, daemon=True).start()
+window.after(1000, threading.Thread(target=_install_prefetch_index_thread, daemon=True).start())
 
 
 

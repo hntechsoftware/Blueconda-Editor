@@ -1,0 +1,29 @@
+# GUI Framework & Utilities
+ttkbootstrap
+pywinstyles
+hPyT
+tktooltip
+tkchart
+screeninfo
+
+# Code Editing, Syntax Highlighting & Formatting
+chlorophyll
+pygments
+autopep8
+markdown
+
+# Search & Web Scraping
+google-search-python
+requests
+beautifulsoup4
+
+# AI Integration
+google-generativeai
+
+# System, File Management & Data Formats
+psutil
+send2trash
+toml
+
+# Optional / Debugging
+friendly-traceback
