@@ -362,6 +362,7 @@ def scalewindow(width, height):
 
 # Get main icon
 window.iconbitmap("src/Bluecondaicon.ico")
+window.iconphoto(True, tk.PhotoImage(file="src/Bluecondalogo2.png"))
 
 window.configure(bg=config_data['background'])
 sys.setrecursionlimit(10000) # Prevent errors
