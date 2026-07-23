@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/github/license/hntechsoftware/Blueconda-Editor?style=for-the-badge&color=brightgreen" alt="License">
 </div>
 
-![App Screenshot](https://lh3.googleusercontent.com/pw/AP1GczMzGtRcOYCi5nEadBm2hVny6VAgPApvrHMcqHvv2gs0cQtHCExJapXdXhgEEMtqJK6piP8lmCh4m7ciPEJCBmGdQ_k0Pmz_DvmvRyvt3e2Hd61bfUk=w2400)
+![App Screenshot](https://github.com/hntechsoftware/Blueconda-Editor/tree/main/screenshots/deepblue.png)
 
 
 [Official Website](https://hntechsoftware.github.io/blueconda)
@@ -24,6 +24,9 @@ Blueconda is designed to accomodate perfectly for every beginner need:
 - handle tasks such as **library installation, feature documentation, compiler installing, dependency management, error messages, code linting, etc** in a much simpler automatic way, without needing to touch a compiler.
 - Sleek UI, closer to a modern app than a complex IDE
 - Usable directly out of the box, as a **full ecosystem** with simple documentation, markdown file editing, code linting, and GUI element designing all packaged
+
+
+![Image](https://github.com/hntechsoftware/Blueconda-Editor/tree/main/screenshots/uioverview.png)
 
 
 ## Features
