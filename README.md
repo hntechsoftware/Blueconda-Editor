@@ -28,9 +28,12 @@ Blueconda is designed to accomodate perfectly for every beginner need:
 - Sleek UI, closer to a modern app than a complex IDE
 - Usable directly out of the box, as a **full ecosystem** with simple documentation, markdown file editing, code linting, and GUI element designing all packaged
 
+<hr>
 <div align="center">
 <img align="center" src="screenshots/uioverview.png" alignment="center" alt="drawing" width="600"/>
 </div>
+<hr>
+
 
 ## Features
 -  All the features you'd expect, such as **syntax highlight, file explorer, line numbers and function outline.** 
