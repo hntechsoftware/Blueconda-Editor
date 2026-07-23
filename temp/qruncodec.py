@@ -1,330 +1,185 @@
 import os
-#!/usr/bin/env python3
-"""
-Tetris for Python / Tkinter
-
-Ole Martin Bjorndalen
-https://github.com/olemb/tetris/
-
-http://tetris.wikia.com/wiki/Tetris_Guideline
-"""
-import random
-from dataclasses import dataclass, replace
-import tkinter
-
-
-shapes = {
-    # See README.md for format.
-    'O': ['56a9', '6a95', 'a956', '956a'],
-    'I': ['4567', '26ae', 'ba98', 'd951'],
-    'J': ['0456', '2159', 'a654', '8951'],
-    'L': ['2654', 'a951', '8456', '0159'],
-    'T': ['1456', '6159', '9654', '4951'],
-    'Z': ['0156', '2659', 'a954', '8451'],
-    'S': ['1254', 'a651', '8956', '0459'],
-}
-
-
-@dataclass(frozen=True)
-class Piece:
-    shape: str
-    rot: int = 0
-    x: int = 0
-    y: int = 0
-
-
-def get_piece_blocks(piece):
-    for char in shapes[piece.shape][piece.rot % 4]:
-        y, x = divmod(int(char, 16), 4)
-        yield piece.x + x, piece.y - y
-
-
-def move_piece(piece, *, rot=0, dx=0, dy=0):
-    rot = (piece.rot + rot) % 4
-    x = piece.x + dx
-    y = piece.y + dy
-    return replace(piece, rot=rot, x=x, y=y)
-
-
-def get_wall_kicks(piece, *, rot=0):
-    return [
-        move_piece(piece, rot=rot, dx=dx, dy=dy)
-        for dx, dy in [(0, 0), (-1, 0), (1, 0), (0, -1)]
-    ]
-
-
-def piece_fits(field, piece):
-    width = len(field[0])
-    height = len(field)
-
-    for x, y in get_piece_blocks(piece):
-        if not 0 <= x < width:
-            return False
-        elif not 0 <= y < height:
-            return False
-        elif field[y][x]:
-            return False
-    else:
-        return True
-
-
-def random_shape_bag():
-    bag = list(shapes)
-
-    # Start with an easy piece.
-    yield random.choice('IJLT')
-
-    while True:
-        random.shuffle(bag)
-        yield from bag
-
-
-def make_rows(width, height):
-    return [[''] * width for _ in range(height)]
-
-
-class Tetris:
-    def __init__(self, width=10, height=16):
-        self.width = width
-        self.height = height
-        self.game_over = False
-        self.score = 0
-        self._random_shapes = random_shape_bag()
-
-        self.field = make_rows(width, height)
-        self.piece = self._get_next_piece()
-
-    def _get_next_piece(self):
-        shape = next(self._random_shapes)
-        centered = self.width // 2 - 2
-        top = self.height - 1
-        return Piece(shape, x=centered, y=top)
-
-    def _place_new_piece(self):
-        self.piece = self._get_next_piece()
-        if not piece_fits(self.field, self.piece):
-            self.game_over = True
-
-    def _freeze_piece(self):
-        for x, y in get_piece_blocks(self.piece):
-            self.field[y][x] = self.piece.shape
-
-    def _remove_full_rows(self):
-        self.field = [row for row in self.field if not all(row)]
-        num_rows_cleared = self.height - len(self.field)
-        self.score += num_rows_cleared
-        self.field += make_rows(self.width, num_rows_cleared)
-
-    def _move(self, *, rot=0, dx=0, dy=0):
-        if rot:
-            candidate_pieces = get_wall_kicks(self.piece, rot=rot)
-        else:
-            candidate_pieces = [move_piece(self.piece, dx=dx, dy=dy)]
-
-        for piece in candidate_pieces:
-            if piece_fits(self.field, piece):
-                self.piece = piece
-                return
-
-        tried_to_move_down = dy == -1
-        if tried_to_move_down:
-            self._freeze_piece()
-            self._remove_full_rows()
-            self._place_new_piece()
-
-    def move(self, movement):
-        if not self.game_over:
-            args = {
-                'left': {'dx': -1},
-                'right': {'dx': 1},
-                'down': {'dy': -1},
-                'rotleft': {'rot': -1},
-                'rotright': {'rot': 1},
-            }[movement]
-            self._move(**args)
-
-
-# Colors from Flatris.
-colors = {
-    'I': '#3cc7d6',  # Cyan.
-    'O': '#fbb414',  # Yellow.
-    'T': '#b04497',  # Magenta.
-    'J': '#3993d0',  # Blue.
-    'L': '#ed652f',  # Orange.
-    'S': '#95c43d',  # Green.
-    'Z': '#e84138',  # Red.
-    '':  '#ecf0f1',  # (Background color.)
-}
-
-
-class BlockDisplay(tkinter.Canvas):
-    def __init__(self, parent, width, height, block_size=40):
-        tkinter.Canvas.__init__(self, parent,
-                                width=width * block_size,
-                                height=height * block_size)
-        self.block_size = block_size
-        self.width = width
-        self.height = height
-        self.color_mode = True
-        self.blocks = {
-            (x, y): self._create_block(x, y)
-            for x in range(width)
-            for y in range(height)
-        }
-
-    def _create_block(self, x, y):
-        flipped_y = self.height - y - 1
-        y = flipped_y
-        size = self.block_size
-        return self.create_rectangle(
-            x * size,
-            y * size,
-            (x + 1) * size,
-            (y + 1) * size,
-            fill='',
-            outline='',
-        )
-
-    def __setitem__(self, pos, char):
-        if self.color_mode:
-            fill = colors[char.upper()]
-        else:
-            if char == '':
-                fill = colors['']
-            elif char.isupper():
-                fill = 'gray50'
-            else:
-                fill = 'black'
-
-        block = self.blocks[pos]
-        self.itemconfigure(block, fill=fill)
-
-    def clear(self):
-        self.itemconfigure('all', fill='')
-
-    def pause(self):
-        self.itemconfigure('all', stipple='gray50')
-
-    def resume(self):
-        self.itemconfigure('all', stipple='')
-
-
-class TetrisTk:
-    def __init__(self):
-
-        self.tk = tk = tkinter.Tk()
-        self.tk.title('Tetris')
-
-        self.tetris = Tetris()
-        self.display = BlockDisplay(tk, self.tetris.width, self.tetris.height)
-        self.display.pack(side=tkinter.TOP, fill=tkinter.X)
-
-        self.score_view = tkinter.Label(self.tk, text='')
-        self.score_view.pack(side=tkinter.TOP, fill=tkinter.X)
-        self.score_view['font'] = 'Helvetica 30'
-
-        tk.bind('<KeyPress>', self.keypress)
-
-        self.paused = True
-        self.fall_id = None
-        self.redraw()
-        self.resume()
-
-        tk.mainloop()
-
-    def fall(self):
-        self.tetris.move('down')
-        self.redraw()
-        if self.tetris.game_over:
-            self.pause()
-        else:
-            self.schedule_fall()
-
-    def schedule_fall(self):
-        # In case we're already called once.
-        self.cancel_fall()
-        self.fall_id = self.tk.after(500, self.fall)
-
-    def cancel_fall(self):
-        if self.fall_id is not None:
-            self.tk.after_cancel(self.fall_id)
-            self.fall_id = None
-
-    def _draw_field(self):
-        for y, row in enumerate(self.tetris.field):
-            for x, char in enumerate(row):
-                self.display[x, y] = char
-
-    def _draw_piece(self):
-        piece = self.tetris.piece
-        char = piece.shape.lower()
-        for x, y in get_piece_blocks(piece):
-            self.display[x, y] = char
-
-    def redraw(self):
-        self._draw_field()
-        if not self.tetris.game_over:
-            self._draw_piece()
-
-        if self.tetris.game_over:
-            self.pause()
-
-        self.score_view['text'] = str(self.tetris.score)
-
-    def pause(self):
-        if not self.paused:
-            self.display.pause()
-            self.cancel_fall()
-            self.paused = True
-
-    def resume(self):
-        if self.paused:
-            self.display.resume()
-            self.schedule_fall()
-            self.paused = False
-
-    def new_game(self):
-        self.tetris = Tetris()
-        self.display.resume()
-        self.resume()
-
-    def toggle_pause(self):
-        if self.tetris.game_over:
-            self.new_game()
-        elif self.paused:
-            self.resume()
-        else:
-            self.pause()
-
-    def toggle_colors(self):
-        self.display.color_mode = not self.display.color_mode
-
-    def keypress(self, event):
-        commands = {
-            'Escape': self.toggle_pause,
-            'space': self.toggle_pause,
-            'c': self.toggle_colors,
-        }
-
-        if not self.paused:
-            commands.update({
-                'Up': lambda: self.tetris.move('rotleft'),
-                'Left': lambda: self.tetris.move('left'),
-                'Right': lambda: self.tetris.move('right'),
-                'Down': lambda: self.tetris.move('down'),
-                'w': lambda: self.tetris.move('rotleft'),
-                'a': lambda: self.tetris.move('left'),
-                's': lambda: self.tetris.move('down'),
-                'd': lambda: self.tetris.move('right'),
-            })
-
-        if event.keysym in commands.keys():
-            commands[event.keysym]()
-            self.redraw()
-
-
-if __name__ == '__main__':
-    TetrisTk()
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import messagebox
+from tkinter.colorchooser import askcolor
+from tkinter import ttk  # Import ttk for themed progress bar
+from PIL import Image, ImageTk
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Image as PLImage, Spacer, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+import tempfile
+
+class TextEditorApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Enhanced Text Editor")
+        self.root.geometry("800x600")
+        self.root.configure(bg="#333333")  # Set background color to dark grey
+
+        self.default_font = ("Helvetica", 12)  # Default font
+        self.available_fonts = [
+            "Helvetica",
+            "Arial",
+            "Times New Roman",
+            "Courier New",
+            "Verdana",
+            "Tahoma",
+        ]
+
+        # Add a default text content
+        self.default_text_content = "NoteWrapper: Versatile PDF Editor"
+
+        # Add a themed progress bar for startup
+        self.startup_progress_label = tk.Label(self.root, text="NoteWrapper: Starting up!", fg="white", bg="#333333")
+        self.startup_progress_label.pack(pady=50)
+        self.startup_progress_bar = ttk.Progressbar(self.root, mode="indeterminate", length=400)
+        self.startup_progress_bar.pack(pady=10)
+        self.startup_progress_bar.start(10)  # Start the progress bar
+
+        # Delay the text editor initialization
+        self.root.after(3000, self.initialize_text_editor)
+
+    def initialize_text_editor(self):
+        self.startup_progress_label.destroy()
+        self.startup_progress_bar.destroy()
+
+        self.text_editor = tk.Text(self.root, wrap=tk.WORD, font=self.default_font, fg="white", bg="#333333")
+        self.text_editor.pack(fill=tk.BOTH, expand=True)
+
+        # Add default text content
+        self.text_editor.insert(tk.END, self.default_text_content)
+
+        # Create a menu
+        self.menu = tk.Menu(self.root)
+        self.root.config(menu=self.menu)
+
+        # File menu
+        self.file_menu = tk.Menu(self.menu)
+        self.menu.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="Save as PDF", command=self.save_as_pdf)
+        self.file_menu.add_command(label="Open File", command=self.open_file)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=self.root.quit)
+
+        # Image menu
+        self.image_menu = tk.Menu(self.menu)
+        self.menu.add_cascade(label="Image", menu=self.image_menu)
+        self.image_menu.add_command(label="Insert Image", command=self.insert_image)
+
+        # Font menu
+        self.font_menu = tk.Menu(self.menu)
+        self.menu.add_cascade(label="Font", menu=self.font_menu)
+        for font in self.available_fonts:
+            self.font_menu.add_command(label=font, command=lambda f=font: self.change_font(f))
+
+        # Text color menu
+        self.text_color_menu = tk.Menu(self.menu)
+        self.menu.add_cascade(label="Text Color", menu=self.text_color_menu)
+        self.text_color_menu.add_command(label="Change Text Color", command=self.change_text_color)
+
+        # Text size menu
+        self.text_size_menu = tk.Menu(self.menu)
+        self.menu.add_cascade(label="Text Size", menu=self.text_size_menu)
+        self.text_size_menu.add_command(label="Increase Text Size", command=self.increase_text_size)
+        self.text_size_menu.add_command(label="Decrease Text Size", command=self.decrease_text_size)
+
+        # Keep track of inserted images
+        self.images = []
+
+        # Bind keyboard shortcuts
+        self.root.bind("<Control-s>", self.save_as_pdf)
+        self.root.bind("<Control-o>", self.open_file)
+        self.root.bind("<Control-x>", self.cut_text)
+        self.root.bind("<Control-c>", self.copy_text)
+        self.root.bind("<Control-v>", self.paste_text)
+
+    def insert_image(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png *.jpg *.jpeg *.gif *.bmp *.ppm *.pgm")])
+        if file_path:
+            image = Image.open(file_path)
+            photo = ImageTk.PhotoImage(image)
+            self.text_editor.image_create(tk.END, image=photo)
+            self.images.append((image, photo))
+
+    def change_font(self, selected_font):
+        self.default_font = (selected_font, 12)
+        self.text_editor.configure(font=self.default_font)
+
+    def change_text_color(self):
+        color = askcolor()[1]  # Ask user for a color
+        if color:
+            self.text_editor.tag_configure("colored", foreground=color)
+            self.text_editor.tag_add("colored", self.text_editor.index(tk.SEL_FIRST), self.text_editor.index(tk.SEL_LAST))
+
+    def increase_text_size(self):
+        current_font = self.text_editor.cget("font")
+        font_size = int(current_font.split(" ")[-1])
+        new_font_size = font_size + 2  # Increase font size by 2
+        new_font = current_font.replace(str(font_size), str(new_font_size))
+        self.text_editor.configure(font=new_font)
+
+    def decrease_text_size(self):
+        current_font = self.text_editor.cget("font")
+        font_size = int(current_font.split(" ")[-1])
+        new_font_size = max(8, font_size - 2)  # Decrease font size by 2 but keep it above 8
+        new_font = current_font.replace(str(font_size), str(new_font_size))
+        self.text_editor.configure(font=new_font)
+
+    def save_as_pdf(self, event=None):
+        text_content = self.text_editor.get("1.0", tk.END).strip()
+        if not text_content and not self.images:
+            messagebox.showerror("Error", "No content to save.")
+            return
+
+        pdf_file_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF Files", "*.pdf")])
+        if pdf_file_path:
+            try:
+                doc = SimpleDocTemplate(pdf_file_path, pagesize=letter)
+                story = []
+
+                # Add images to the story
+                for img, _ in self.images:
+                    img_path = tempfile.mktemp(suffix=".png")
+                    img.save(img_path, format="PNG")
+
+                    story.append(PLImage(img_path, width=400, height=300))
+                    story.append(Spacer(1, 12))  # Add some spacing between images
+
+                # Add text content to the story
+                styles = getSampleStyleSheet()
+                style = styles["Normal"]
+                # Set a recognized font for ReportLab (e.g., Helvetica)
+                style.fontName = "Helvetica"
+                style.fontSize = self.default_font[1]
+                story.append(Paragraph(text_content, style))
+
+                doc.build(story)
+                messagebox.showinfo("Info", "PDF saved successfully.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Error saving PDF: {str(e)}")
+
+    def open_file(self, event=None):
+        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+        if file_path:
+            with open(file_path, "r") as file:
+                content = file.read()
+                self.text_editor.delete("1.0", tk.END)  # Clear existing content
+                self.text_editor.insert(tk.END, content)
+
+    def cut_text(self, event=None):
+        self.text_editor.event_generate("<<Cut>>")
+
+    def copy_text(self, event=None):
+        self.text_editor.event_generate("<<Copy>>")
+
+    def paste_text(self, event=None):
+        self.text_editor.event_generate("<<Paste>>")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TextEditorApp(root)
+    root.mainloop()
 
 
 os.system('pause')

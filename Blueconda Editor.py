@@ -59,6 +59,7 @@ import shutil
 import tkchart
 from importlib import metadata
 from urllib.parse import urlparse
+import traceback
 
 # Define theme for app
 themeblueconda = { # This was redacted later
@@ -82,6 +83,113 @@ themeblueconda = { # This was redacted later
         "active": "#e5e5e5"
         }
 }
+
+def get_diagnostics_info():
+    """Gathers environment/system info useful for debugging crash reports."""
+    import platform
+    import datetime
+
+    lines = []
+    lines.append("=== Diagnostics ===")
+    lines.append(f"Date/Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"OS: {platform.system()} {platform.release()} ({platform.version()})")
+    lines.append(f"Machine: {platform.machine()}")
+    lines.append(f"Python Version: {platform.python_version()}")
+    lines.append(f"Python Implementation: {platform.python_implementation()}")
+    lines.append(f"Tkinter Version: {tk.TkVersion}")
+
+    try:
+        import ttkbootstrap
+        lines.append(f"ttkbootstrap Version: {ttkbootstrap.__version__}")
+    except Exception:
+        lines.append("ttkbootstrap Version: Not found / not installed")
+
+    try:
+        import friendly_traceback
+        lines.append(f"Friendly Version: {friendly_traceback.__version__}")
+    except Exception:
+        lines.append("Friendly Version: Not found / not installed")
+
+    lines.append(f"Working Directory: {os.getcwd()}")
+    lines.append(f"Executable: {sys.executable}")
+    lines.append("===================")
+
+    return "\n".join(lines)
+
+def show_fatal_error(exc_type, exc_value, exc_traceback):
+    """Displays a Toplevel with the fatal error instead of letting the
+    app crash/close silently. Hooked into globally - see setup_crash_handler()."""
+
+    error_text = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    print(error_text)  # still log it to console/terminal for debugging
+
+    error_para = ''' \n\nPlease help us make Blueconda better for everyone by posting an issue on github. Click the button below to do so, and in your issue statement, copy the error message and diagnostics info.\n\n\n If the errors persist, reinstall Blueconda Editor. If you are on a Beta release, revert to a Stable one.\n\n
+    '''
+
+    win = tk.Toplevel()
+    win.attributes('-topmost', True)
+    win.attributes("-alpha", 0.9)
+    win.configure(bg=config_data["background"])
+    win.title("Fatal Error")
+    win.minsize(700, 450)
+
+    label = tk.Label(
+        win, text="A Fatal Error Occurred :(",
+        font=fontnew, bg=config_data['background'], fg=config_data['textforeground']
+    )
+    label.pack(pady=10)
+
+    output_text = tb.ScrolledText(win, wrap="word")
+    output_text.pack(fill=tk.BOTH, expand=True, padx=10)
+    output_text.insert(tk.END, error_text)
+    output_text.insert(tk.END, error_para) # Insert helpful info
+    output_text.insert(tk.END, get_diagnostics_info() + "\n\n")
+    output_text.config(state="disabled")
+
+    btn_frame = tk.Frame(win, bg=config_data['background'])
+    btn_frame.pack(fill=tk.BOTH, pady=8)
+
+    tb.Button(
+        btn_frame, text="Open Issue on GitHub", style='Link.TButton',
+        command=lambda: webbrowser.open_new_tab("https://github.com/hntechsoftware/Blueconda-Editor/issues/new")
+    ).pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=5)
+
+    tb.Button(
+        btn_frame, text="Close App", style='Outline.TButton',
+        command=lambda: os._exit(1)  # force-quits immediately, bypassing normal shutdown
+    ).pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=5)
+
+    pywinstyles.change_header_color(win, color=config_data['background'])
+    maximize_minimize_button.hide(win)
+
+
+def _tk_callback_exception_handler(self, exc_type, exc_value, exc_traceback):
+    # Overrides Tk's default report_callback_exception, which normally
+    # just prints to console and silently continues. This routes it to
+    # our fatal error window instead.
+    show_fatal_error(exc_type, exc_value, exc_traceback)
+
+
+def _sys_exception_handler(exc_type, exc_value, exc_traceback):
+    # Catches anything NOT inside a Tkinter callback (e.g. startup code,
+    # code running directly in the main thread outside the event loop)
+    show_fatal_error(exc_type, exc_value, exc_traceback)
+
+
+def _thread_exception_handler(args):
+    # Catches errors inside threading.Thread targets (e.g. your
+    # install_dependencies() background thread) - these are invisible
+    # to both of the hooks above.
+    show_fatal_error(args.exc_type, args.exc_value, args.exc_traceback)
+
+
+def setup_crash_handler(root):
+    """Call this once, right after creating your main Tk() root window,
+    to route all uncaught exceptions app-wide into the fatal error window."""
+    tk.Tk.report_callback_exception = _tk_callback_exception_handler
+    sys.excepthook = _sys_exception_handler
+    threading.excepthook = _thread_exception_handler
+
 
 # Important vars
 file_loaded = False
@@ -125,7 +233,7 @@ global config_data # Dictionary for theme applying
 config_data = extract_toml_table(file_path, table_name) # Used to load themes
 # print(config_data) # For debugging purposes
 
-__version__ = "1.0" # Blueconda Version
+__version__ = "1.0 (Beta)" # Blueconda Version
 
 # Variable to manage Show Welcome Message
 is_on = True
@@ -233,6 +341,9 @@ def build_exe(script_path, AppToLaunch, EnableWait:bool):
 window = tb.Window(themename=f"{config_data['themename']}")
 window.state("zoomed")
 window.title(f"Blueconda Editor {__version__}")
+
+# Setup crash handler
+setup_crash_handler(window)
 
 for m in get_monitors():
     if m.is_primary:
@@ -1113,19 +1224,28 @@ def tag_other(event):
     del(text_string)
 
 def tag_escaped_characters(event):
-    usertext.tag_remove("escaped_char", 1.0, tk.END)
-    usertext.tag_configure("escaped_char", foreground=syntax_colors['operator'])
+    try:
+        usertext.tag_remove("escaped_char", 1.0, tk.END)
+        usertext.tag_configure("escaped_char", foreground=syntax_colors['operator'])
 
-    text_string = usertext.get("1.0", tk.END)
+        text_string = usertext.get("1.0", tk.END)
 
-    # Find all escaped characters (backslashes followed by any character)
-    for match in re.finditer(r"\\.", text_string):
-        start, end = match.span()
-        # Tag the entire match (backslash + character)
-        usertext.tag_add("escaped_char", start, end)
+        # Find all escaped characters (backslashes followed by any character)
+        for match in re.finditer(r"\\.", text_string):
+            start, end = match.span()
+            
+            # Convert Python string indices to Tkinter "line.char" format safely
+            # Or if using absolute integer indices directly:
+            start_idx = f"1.0 + {start} chars"
+            end_idx = f"1.0 + {end} chars"
+            
+            # Tag the entire match (backslash + character)
+            usertext.tag_add("escaped_char", start_idx, end_idx)
 
-    del text_string
-
+        del text_string
+        
+    except (tk.TclError, IndexError): # Handle the highly common bad text index errors
+        pass
 
 # MASTER Function for Syntax Highlight
 def tag_all(event=None):
@@ -1387,10 +1507,9 @@ notebook = tb.Notebook(window, width=320, bootstyle="primary")
 frame1 = tk.Frame(notebook, bg="white")
 frame2 = tk.Frame(notebook, bg="white")
 frame3 = tk.Frame(notebook, bg="white")
-frame4 = tb.LabelFrame(notebook, text="(File Path Appears Here)") # This is label frame to 
+frame4 = tb.LabelFrame(notebook, text="(Click Here to load a Folder)") # This is label frame to 
 frame5 = tk.Frame(notebook, bg="white")      # display file path as well
 frame6 = tk.Frame(notebook, bg="white")
-
 
 
 # add frames to notebook
@@ -2192,6 +2311,7 @@ del(newinsert)
 notes.bind("<Any-KeyRelease>",autosavenotes)
 
 app = Application(frame4)
+frame4.bind("<Button-1>", lambda event: app.load_selected_folder())
 
 
 # The following code has been redacted (kept here for emergency use)
@@ -3020,7 +3140,7 @@ def open_file():
         initialdir=default_dir,
     )
     
-    if file_path:
+    if file_path: # ERRORLOCATEDHERE
         with open(file_path, "r", encoding="utf-8") as f:
             usertext.delete("1.0", tk.END)
             usertext.insert("1.0", f.read())
@@ -4717,6 +4837,9 @@ def comingsoon(): # no guarantees!
 # Initialize Unsaved Changes Indicator
 create_unsaved_indicator(window, savefilebutton)
 
+
+
+
 def useconfig():
     configpy = codeview.get(1.0, tk.END)
     with open("settings/userconfig.py", "w") as bbc:
@@ -4725,7 +4848,6 @@ def useconfig():
     apwin.destroy()
 
 def appconfigutility(): 
-
     with open("settings/userconfig.py", "r") as tts:
         pretext = tts.read()
         tts.close()
@@ -4786,9 +4908,10 @@ edit_menu.add_command(label="Fullscreen",command=fullscreen)
 # Add a help menu
 help_menu = tk.Menu(window, tearoff=0)
 help_menu.add_command(label="Install Python", command=pythoninstallwindow)
-help_menu.add_command(label="Install All Dependencies", command=DependencyManager) 
-help_menu.add_command(label="Lookup Function", command=lookfunction)
+help_menu.add_command(label="Install All Dependencies", command=DependencyManager)
+help_menu.add_command(label="Check for Updates...", command=comingsoon) # TODO finish this 
 help_menu.add_separator()
+help_menu.add_command(label="Lookup Function", command=lookfunction)
 help_menu.add_command(label="Documentation", command=documentationopen)
 help_menu.add_command(label="Website")
 help_menu.add_separator()
