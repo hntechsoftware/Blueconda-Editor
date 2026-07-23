@@ -1,17 +1,19 @@
 
 <h1 align="center"> 🔹Blueconda Editor🔹</h1>
-<hr>
 <h3 align="center"> 🔹Beginner-Friendly Python Code Editor🔹 </h3>
 
+<hr>
 <div align="center">
   <img src="https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54" alt="Python">
   <img src="https://img.shields.io/badge/gui-tkinter-brightgreen?style=for-the-badge" alt="Tkinter">
   <img src="https://img.shields.io/github/repo-size/hntechsoftware/Blueconda-Editor?style=for-the-badge&color=brightgreen" alt="Repo Size">
   <img src="https://img.shields.io/github/license/hntechsoftware/Blueconda-Editor?style=for-the-badge&color=brightgreen" alt="License">
 </div>
+<hr>
 
-<img align="center" src="screenshots/deepblue.png" alt="drawing" width="600"/>
-
+<div align="center">
+<img src="screenshots/deepblue.png" alt="drawing" width="600"/>
+</div>
 
 [Official Website](https://hntechsoftware.github.io/blueconda)
 
@@ -26,9 +28,9 @@ Blueconda is designed to accomodate perfectly for every beginner need:
 - Sleek UI, closer to a modern app than a complex IDE
 - Usable directly out of the box, as a **full ecosystem** with simple documentation, markdown file editing, code linting, and GUI element designing all packaged
 
-
+<div align="center">
 <img align="center" src="screenshots/uioverview.png" alignment="center" alt="drawing" width="600"/>
-
+</div>
 
 ## Features
 -  All the features you'd expect, such as **syntax highlight, file explorer, line numbers and function outline.** 
