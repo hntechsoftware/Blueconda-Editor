@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/github/license/hntechsoftware/Blueconda-Editor?style=for-the-badge&color=brightgreen" alt="License">
 </div>
 
-<img src="screenshots/deepblue.png" alt="drawing" width="600"/>
+<center><img src="screenshots/deepblue.png" alt="drawing" width="600"/></center>
 
 
 [Official Website](https://hntechsoftware.github.io/blueconda)
@@ -26,7 +26,7 @@ Blueconda is designed to accomodate perfectly for every beginner need:
 - Usable directly out of the box, as a **full ecosystem** with simple documentation, markdown file editing, code linting, and GUI element designing all packaged
 
 
-<img src="screenshots/uioverview.png" alt="drawing" width="600"/>
+<center><img src="screenshots/uioverview.png" alignment="center" alt="drawing" width="600"/></center>
 
 
 ## Features
