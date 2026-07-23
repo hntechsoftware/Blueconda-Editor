@@ -383,6 +383,8 @@ C.config(background=config_data['background'])
 def documentationopen(): # Self explanatory
     webbrowser.open("https://hntech.gitbook.io/blueconda-documentation", autoraise=True)
 
+def websiteopen(): # Self explanatory
+    webbrowser.open("https://hntechsoftware.github.io/blueconda", autoraise=True)
 
 #DANGEROUS TEST REIGON STR
 
@@ -462,28 +464,9 @@ def newline():
 #   All code for Window goes here...
 #
 #    pywinstyles.change_header_color(win, color=config_data['background'])  Change top bar color
-#    maximize_minimize_button.hide(win)                                     Hide the 🗖/- buttons (keep X)
+#    maximize_minimize_button.hide(win)                                     Hide the max/- buttons (keep X)
 #
-#
-# The list of Subwindows is as follows (with description)
-#
-# template_window     (Template Selection Window)
-# pywin               (Python Installation Window)
-# wscreen             (Welcome Screen)
-# tfwin               (TODOs/FIXMEs Window)
-# root                (Func Outline window)
-# quotewin            (Quote Window)
-# fontwin             (Font Selection)
-# cwin                (Theme Changing)
-# setmenu             (Setting menu)
-# nwin                (Error Msg Window)
-# finwin              (Find/Replace)
-# aiwindow            (AI Q/A)
-# newwin              (Tips Window)
-# licensewindow       (License Window)
-# cswin               (Coming Soon Window)
-# apwin               (App Config Utility)
-# aboutwin            (About Window)
+
 
 def aboutapp():
     aboutwin = tk.Toplevel()                            
@@ -4613,7 +4596,7 @@ def _install_populate_rows(results, exact_count=0):
         row.pack(side="top", fill="x", padx=4, pady=6)
 
         install_btn = tb.Button(
-            row, text="↓", font=fontnew,
+            row, text="↓",
             command=lambda name=pkg["name"]: _install_on_install_clicked(name)
         )
 
@@ -4826,11 +4809,11 @@ def comingsoon(): # no guarantees!
     cswin.configure(bg=config_data["background"])
     cswin.title("Coming Soon!")
     tk.Label(cswin, font=fontnew, text="New planned features\nthat might be added soon!\n(No Guarantees)").grid(row=0, column=0)
-    tk.Label(cswin, text="1) Better Functionality and support \n for the AI Q&A Feature", justify="left").grid(row=1, column=0, sticky="W", pady=5)
-    tk.Label(cswin, text="2) Ability to auto download and install\n updates", justify="left").grid(row=2, column=0, sticky="W", pady=5)
-    tk.Label(cswin, text="3) Built in python compiler to make installing\n easier (and automatically building exe files)", justify="left").grid(row=3, column=0, sticky="W", pady=5)
-    tk.Label(cswin, text="4) Support for programming MicroPython\n compatible boards like ESP8266", justify="left").grid(row=4, column=0, sticky="W", pady=5)
-    tk.Label(cswin, text="5) Save points: adding restore points to revert\n your code back to if things go wrong.\nSimilar to Git, but simpified!", justify="left").grid(row=5, column=0, sticky="W", pady=5)
+    tk.Label(cswin, text="1) Better Functionality and support\nfor the AI Feature.", justify="left").grid(row=1, column=0, sticky="W", pady=5)
+    tk.Label(cswin, text="2) Ability to auto download and install\nupdates", justify="left").grid(row=2, column=0, sticky="W", pady=5)
+    tk.Label(cswin, text="3) Built in python compiler to make installing\neasier (and automatically building exe files)", justify="left").grid(row=3, column=0, sticky="W", pady=5)
+    tk.Label(cswin, text="4) Support for programming MicroPython\ncompatible boards like ESP8266", justify="left").grid(row=4, column=0, sticky="W", pady=5)
+    tk.Label(cswin, text="5) A built in Git client for version\ncontrol and connecting to repos.", justify="left").grid(row=5, column=0, sticky="W", pady=5)
     pywinstyles.change_header_color(cswin, color=config_data['background'])
     maximize_minimize_button.hide(cswin)
 
@@ -4909,7 +4892,7 @@ edit_menu.add_command(label="Fullscreen",command=fullscreen)
 help_menu = tk.Menu(window, tearoff=0)
 help_menu.add_command(label="Install Python", command=pythoninstallwindow)
 help_menu.add_command(label="Install All Dependencies", command=DependencyManager)
-help_menu.add_command(label="Check for Updates...", command=comingsoon) # TODO finish this 
+# help_menu.add_command(label="Check for Updates...", command=comingsoon) # TODO finish this 
 help_menu.add_separator()
 help_menu.add_command(label="Lookup Function", command=lookfunction)
 help_menu.add_command(label="Documentation", command=documentationopen)
