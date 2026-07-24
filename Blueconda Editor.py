@@ -349,8 +349,8 @@ window = tb.Window(themename=f"{config_data['themename']}")
 window.state("zoomed")
 window.title(f"Blueconda Editor {__version__}")
 
-# Setup crash handler
-setup_crash_handler(window)
+# Setup crash handler TODO crash handler bug fix
+# setup_crash_handler(window) 
 
 for m in get_monitors():
     if m.is_primary:
@@ -4464,21 +4464,43 @@ def install_package(python_exe, package_name):
  
  
 def _install_fetch_pypi_index():
-    """Downloads and parses https://pypi.org/simple/ into a flat list of names."""
-    response = requests.get("https://pypi.org/simple/", timeout=20)
-    html = response.text
- 
+    """Downloads and parses https://pypi.org/simple/ into a flat list of names, reporting progress."""
+    response = requests.get("https://pypi.org/simple/", timeout=20, stream=True)
+    response.raise_for_status()
+
+    total_size = int(response.headers.get("Content-Length", 0))
+    downloaded = 0
+    chunks = []
+
+    for chunk in response.iter_content(chunk_size=65536):  # 64 KB chunks
+        if not chunk:
+            continue
+        chunks.append(chunk)
+        downloaded += len(chunk)
+
+        if total_size > 0:
+            percent = int((downloaded / total_size) * 100)
+            window.after(0, _install_update_progress, percent)
+
+    html = b"".join(chunks).decode("utf-8", errors="ignore")
+
     names = []
-    for chunk in html.split('<a href="')[1:]:
+    for part in html.split('<a href="')[1:]:
         try:
-            name = chunk.split('>')[1].split('<')[0]
+            name = part.split('>')[1].split('<')[0]
             names.append(name)
         except IndexError:
             continue
- 
+
     return names
- 
- 
+
+
+def _install_update_progress(percent):
+    # Only touch the label if the user hasn't already started searching
+    if _install_status_label.cget("text").startswith("Loading"):
+        _install_status_label.config(text=f"Loading List... ({percent})")
+
+
 def _install_prefetch_index_thread():
     """Runs once at startup on a background thread to warm _install_pypi_index."""
     global _install_pypi_index
@@ -4487,24 +4509,24 @@ def _install_prefetch_index_thread():
         _install_pypi_index = names
     except Exception as e:
         _install_pypi_index = []
-        installframe.after(0, _install_on_prefetch_failed, str(e))
+        window.after(0, _install_on_prefetch_failed, str(e))
         _install_index_event.set()
         return
- 
+
     window.after(0, _install_on_prefetch_done)
     _install_index_event.set()
- 
- 
+
+
 def _install_on_prefetch_done():
     # Only touch the status label if the user hasn't already started searching
-    if _install_status_label.cget("text") == "Loading package list...":
+    if _install_status_label.cget("text").startswith("Loading"):
         _install_status_label.config(text="")
- 
- 
+
+
 def _install_on_prefetch_failed(error_text):
     _install_status_label.config(text="Package index failed to load")
     print(f"Failed to prefetch PyPI index: {error_text}")
- 
+
  
 def _install_fetch_package_summary(name):
     """Fetch short description for a single package. Returns '' on any failure."""
@@ -4727,7 +4749,7 @@ build_installframe_ui()
 # Kick off the PyPI index download immediately, on a background thread, so it's
 # already warm by the time the user runs their first search.
 _install_status_label.config(text="Loading package list...")
-window.after(1000, threading.Thread(target=_install_prefetch_index_thread, daemon=True).start())
+window.after(0, lambda: threading.Thread(target=_install_prefetch_index_thread, daemon=True).start())
 
 
 
