@@ -233,7 +233,7 @@ global config_data # Dictionary for theme applying
 config_data = extract_toml_table(file_path, table_name) # Used to load themes
 # print(config_data) # For debugging purposes
 
-__version__ = "1.0" # Blueconda Version
+__version__ = "1.1" # Blueconda Version
 
 # Variable to manage Show Welcome Message
 is_on = True
@@ -3138,6 +3138,73 @@ def open_file():
 # TODO finish context menu and file assoc settings for Stable release
 # TODO add check for updates
 
+
+def check_for_updates(current_version: str, repo_owner: str, repo_name: str, include_prereleases: bool = True):
+    """
+    Checks GitHub Releases for a newer version than `current_version`.
+
+    Args:
+        current_version: The app's current version, e.g. "1.0" (usually your __version__ var).
+        repo_owner: GitHub username/org
+        repo_name: Repo name
+        include_prereleases: If True, checks the latest release of any kind (including
+                              -beta tags). If False, only considers the latest full release.
+    """
+
+    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases"
+
+    try:
+        response = requests.get(api_url, timeout=5)
+        response.raise_for_status()
+        releases = response.json()
+    except requests.RequestException as e:
+        messagebox.showerror("Update Check Failed", f"Could not check for updates:\n{e}")
+        return
+
+    if not releases:
+        messagebox.showerror("Update Check Failed", "No releases found for this repository.")
+        return
+
+    if include_prereleases:
+        latest = releases[0]  # GitHub returns releases newest-first
+    else:
+        latest = next((r for r in releases if not r.get("prerelease", False)), None)
+        if latest is None:
+            messagebox.showerror("Update Check Failed", "No stable releases found.")
+            return
+
+    tag_name = latest.get("tag_name", "")
+    release_url = latest.get("html_url", f"https://github.com/{repo_owner}/{repo_name}/releases")
+
+    # Extract version number from tag, e.g. "v1.1-beta" -> "1.1"
+    match = re.search(r"v?(\d+(?:\.\d+)*)", tag_name)
+    if not match:
+        messagebox.showerror("Update Check Failed", f"Could not parse version from tag '{tag_name}'.")
+        return
+
+    latest_version_str = match.group(1)
+
+    def version_tuple(v):
+        return tuple(int(x) for x in v.split("."))
+
+    try:
+        latest_tuple = version_tuple(latest_version_str)
+        current_tuple = version_tuple(current_version)
+    except ValueError:
+        messagebox.showerror("Update Check Failed", "Could not compare version numbers.")
+        return
+
+    if latest_tuple > current_tuple:
+        answer = messagebox.askyesno(
+            "Update Available",
+            f"Version {latest_version_str} is the new latest. "
+            f"You are on {current_version}. Download new version?"
+        )
+        if answer:
+            webbrowser.open(release_url)
+    else:
+        messagebox.showerror("No Updates", f"You are on the latest version ({current_version}).")
+
 def save_file_as():
     file_path = filedialog.asksaveasfilename(
         title="Save File As",
@@ -4894,7 +4961,7 @@ edit_menu.add_command(label="Fullscreen",command=fullscreen)
 help_menu = tk.Menu(window, tearoff=0)
 help_menu.add_command(label="Install Python", command=pythoninstallwindow)
 help_menu.add_command(label="Install All Dependencies", command=DependencyManager)
-# help_menu.add_command(label="Check for Updates...", command=comingsoon) # TODO finish this 
+help_menu.add_command(label="Check for Updates...", command=lambda: check_for_updates(__version__, "hntechsoftware", "Blueconda-Editor", True)) 
 help_menu.add_separator()
 help_menu.add_command(label="Lookup Function", command=lookfunction)
 help_menu.add_command(label="Documentation", command=documentationopen)
