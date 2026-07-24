@@ -233,7 +233,7 @@ global config_data # Dictionary for theme applying
 config_data = extract_toml_table(file_path, table_name) # Used to load themes
 # print(config_data) # For debugging purposes
 
-__version__ = "1.0 (Beta)" # Blueconda Version
+__version__ = "1.0" # Blueconda Version
 
 # Variable to manage Show Welcome Message
 is_on = True
