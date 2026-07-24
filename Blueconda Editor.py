@@ -68,6 +68,18 @@ try:
 except Exception:
     pass
 
+
+def _set_working_directory():
+    if getattr(sys, 'frozen', False):
+        # Running as a compiled exe (PyInstaller etc.)
+        app_dir = os.path.dirname(sys.executable)
+    else:
+        # Running as a raw .py script
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(app_dir)
+
+_set_working_directory()
+
 # Define theme for app
 themeblueconda = { # This was redacted later
     "type": "light",
