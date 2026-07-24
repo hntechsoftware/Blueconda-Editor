@@ -3124,7 +3124,7 @@ def open_file():
         initialdir=default_dir,
     )
     
-    if file_path: # ERRORLOCATEDHERE
+    if file_path: 
         with open(file_path, "r", encoding="utf-8") as f:
             usertext.delete("1.0", tk.END)
             usertext.insert("1.0", f.read())
@@ -3135,8 +3135,7 @@ def open_file():
     file_loaded = True
     usertext.edit_modified(False)
 
-# TODO finish context menu and file assoc settings for Stable release
-# TODO add check for updates
+
 
 
 def check_for_updates(current_version: str, repo_owner: str, repo_name: str, include_prereleases: bool = True):
@@ -5016,7 +5015,32 @@ except Exception as e:
     messagebox.showerror("Error",
                           f"Blueconda has detected a problem in the App Config Utility.\n\nError: {e}")
 
-window.after(1200, welcomescreen) # Deploy welcomescreen
+# File open func part 2 - context menus
+def open_file_outside_editor(file_path): 
+    global file_loaded
+    
+    if file_path: 
+        with open(file_path, "r", encoding="utf-8") as f:
+            usertext.delete("1.0", tk.END)
+            usertext.insert("1.0", f.read())
+        update_title(file_path)
+        tag_all()
+        with open("temp/currentfile.txt","w", encoding="utf-8") as rw:
+            rw.write(file_path)
+    file_loaded = True
+    usertext.edit_modified(False)
+
+
+# Before loop - handle if app opened through context menu or right click
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+    try:
+        open_file_outside_editor(file_path)
+    except Exception as e:
+        tk.messagebox.showerror("Error Opening File", f"Could not open file:\n{e}")
+else:
+    # Do not show welcome screen if user opens file out of editor
+    window.after(1200, welcomescreen) # Deploy welcomescreen
 
 window.mainloop() # Run the mainloop
 
