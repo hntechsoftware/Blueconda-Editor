@@ -60,6 +60,13 @@ import tkchart
 from importlib import metadata
 from urllib.parse import urlparse
 import traceback
+import ctypes
+
+myappid = "hntech.bluecondaeditor.1.1"
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except Exception:
+    pass
 
 # Define theme for app
 themeblueconda = { # This was redacted later
@@ -180,7 +187,7 @@ def _thread_exception_handler(args):
     # Catches errors inside threading.Thread targets (e.g. your
     # install_dependencies() background thread) - these are invisible
     # to both of the hooks above.
-    show_fatal_error(args.exc_type, args.exc_value, args.exc_traceback)
+    window.after(0, lambda: show_fatal_error(args.exc_type, args.exc_value, args.exc_traceback))
 
 
 def setup_crash_handler(root):
@@ -4484,7 +4491,7 @@ def _install_prefetch_index_thread():
         _install_index_event.set()
         return
  
-    installframe.after(0, _install_on_prefetch_done)
+    window.after(0, _install_on_prefetch_done)
     _install_index_event.set()
  
  
